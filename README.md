@@ -102,7 +102,6 @@ Raw clinical data are not included. Users must obtain approved access to MIMIC I
 Ethical Framing and Intended Use
 
 This framework is intended as a governance and decision safety mechanism, not as a clinical decision system. It does not replace clinician judgment, institutional protocols, or regulatory oversight.
-
 Simulation is used explicitly for pre deployment evaluation, allowing adaptive strategies to be stress tested before any real world use, reducing the risk of uncontrolled experimentation on patients.
 
 Audit Informed Deployment
@@ -113,14 +112,11 @@ Data Governance and Privacy
 
 All workflows assume compliance with institutional review board requirements, deidentification standards, and local privacy regulations. No identifiable patient data are required.
 
-Clinical Safety Disclaimer (FDA Good Machine Learning Practice Aligned)
+Clinical Safety Disclaimer 
 
-This repository provides research software intended solely for methodological development, simulation, and governance research. It is not a medical device, not a clinical decision support system, and not intended for direct clinical use.
-
-No component has been reviewed or approved by the U.S. Food and Drug Administration. Any real world use would require regulatory authorization, institutional approval, and continuous monitoring.
+This repository provides research software intended solely for methodological development, simulation, and governance research. It is not a medical device, not a clinical decision support system, and not intended for direct clinical use. No component has been reviewed or approved by the U.S. Food and Drug Administration. Any real world use would require regulatory authorization, institutional approval, and continuous monitoring.
 
 Human oversight is assumed at all stages. Automated model selection does not transfer accountability away from clinicians or institutions.
-
 Simulation results do not substitute for prospective validation. Users are responsible for regulatory, ethical, and institutional compliance.
 
 Post-Deployment Monitoring and Drift Detection
@@ -141,9 +137,7 @@ Contextual drift may also arise when variables used for decision making change i
 
 Outcome Drift and Label Stability
 
-Outcome definitions in healthcare may evolve due to changes in coding practices, clinical guidelines, or institutional policies. Such label drift can invalidate reward signals and undermine confidence estimates.
-
-Post deployment governance should include periodic review of outcome definitions, safety penalties, and reward formulations to ensure continued alignment with clinical objectives.
+Outcome definitions in healthcare may evolve due to changes in coding practices, clinical guidelines, or institutional policies. Such label drift can invalidate reward signals and undermine confidence estimates. Post deployment governance should include periodic review of outcome definitions, safety penalties, and reward formulations to ensure continued alignment with clinical objectives.
 
 Policy Behavior Auditing
 
@@ -154,7 +148,6 @@ Unexpected persistence of eliminated models, excessive exploration, or premature
 Safeguards and Intervention Thresholds
 
 Operational deployment should define explicit thresholds for human intervention, including triggers for policy suspension, rollback to static deployment, or retraining of component models.
-
 Such safeguards ensure that adaptive behavior remains subordinate to clinical safety and institutional control.
 
 Feedback Loops and Documentation
@@ -165,9 +158,7 @@ All changes to deployment logic should be version controlled and auditable.
 
 Relationship to This Repository
 
-This repository provides tools for pre deployment evaluation and simulation of delayed feedback and adaptive policies. While it does not implement full production monitoring infrastructure, its design anticipates integration with institutional monitoring systems and emphasizes the need for continuous oversight.
-
-Post deployment monitoring is therefore an essential complement to the governance mechanisms implemented here, not an optional extension.
+This repository provides tools for pre deployment evaluation and simulation of delayed feedback and adaptive policies. While it does not implement full production monitoring infrastructure, its design anticipates integration with institutional monitoring systems and emphasizes the need for continuous oversight. Post deployment monitoring is therefore an essential complement to the governance mechanisms implemented here, not an optional extension.
 
 Governance Versus Experimentation
 
@@ -185,27 +176,19 @@ This repository implements a governance framework for adaptive clinical AI deplo
 
 Simulation Based Evaluation
 
-All reference results are derived from retrospective simulation using deidentified clinical data. Although simulation is ethically appropriate for evaluating adaptive deployment strategies, it cannot fully capture the complexity of real world clinical workflows, documentation practices, or clinician responses to AI systems. Performance observed under simulated deployment may differ under prospective or operational conditions.
-
-Simulation is therefore intended as a pre deployment stress testing tool, not as evidence of clinical effectiveness.
+All reference results are derived from retrospective simulation using deidentified clinical data. Although simulation is ethically appropriate for evaluating adaptive deployment strategies, it cannot fully capture the complexity of real world clinical workflows, documentation practices, or clinician responses to AI systems. Performance observed under simulated deployment may differ under prospective or operational conditions. Simulation is therefore intended as a pre deployment stress testing tool, not as evidence of clinical effectiveness.
 
 Dependence on Prevalidated Models
 
-The framework assumes that all candidate predictive models have undergone independent development, validation, and calibration prior to inclusion. The governance layer does not correct for fundamentally unsafe, poorly specified, or clinically inappropriate models.
-
-Adaptive deployment cannot compensate for inadequate model development. Unsafe inputs, flawed labels, or inappropriate targets remain sources of risk outside the scope of this framework.
+The framework assumes that all candidate predictive models have undergone independent development, validation, and calibration prior to inclusion. The governance layer does not correct for fundamentally unsafe, poorly specified, or clinically inappropriate models. Adaptive deployment cannot compensate for inadequate model development. Unsafe inputs, flawed labels, or inappropriate targets remain sources of risk outside the scope of this framework.
 
 Reward Specification and Normative Choices
 
-Central to the framework is the specification of reward functions that encode predictive correctness, operational cost, and safety penalties. These quantities reflect normative and institutional value judgments, not purely statistical facts.
-
-Mis specification of costs, harms, or penalty weights may lead to undesirable deployment behavior. While the framework makes these tradeoffs explicit and auditable, it does not eliminate the need for careful institutional deliberation.
+Central to the framework is the specification of reward functions that encode predictive correctness, operational cost, and safety penalties. These quantities reflect normative and institutional value judgments, not purely statistical facts. Mis specification of costs, harms, or penalty weights may lead to undesirable deployment behavior. While the framework makes these tradeoffs explicit and auditable, it does not eliminate the need for careful institutional deliberation.
 
 Context Representation
 
-The effectiveness of contextual bandit policies depends on the adequacy of context representation. Omitted variables, delayed measurements, or context drift may degrade performance or bias deployment decisions.
-
-The framework assumes that relevant patient context is available at decision time and remains stable over the feedback horizon. Violations of these assumptions may reduce the reliability of confidence estimates and policy behavior.
+The effectiveness of contextual bandit policies depends on the adequacy of context representation. Omitted variables, delayed measurements, or context drift may degrade performance or bias deployment decisions. The framework assumes that relevant patient context is available at decision time and remains stable over the feedback horizon. Violations of these assumptions may reduce the reliability of confidence estimates and policy behavior.
 
 Delayed and Noisy Outcomes
 
@@ -216,14 +199,11 @@ The framework does not address unobserved outcomes or nonstationary outcome defi
 Statistical Guarantees and Practical Validity
 
 Fixed confidence guarantees rely on assumptions such as bounded rewards, sub Gaussian noise, and sufficient sample sizes. In practice, violations of these assumptions may weaken theoretical guarantees.
-
 Statistical confidence does not equate to clinical safety. Guarantees apply only within the specified modeling assumptions and reward definitions.
 
 Generalizability
 
-Results obtained using MIMIC IV data may not generalize to other institutions, populations, or clinical settings. Differences in patient mix, care practices, data quality, and documentation can materially affect deployment behavior.
-
-Users should validate the framework in their own contexts before drawing conclusions or considering operational use.
+Results obtained using MIMIC IV data may not generalize to other institutions, populations, or clinical settings. Differences in patient mix, care practices, data quality, and documentation can materially affect deployment behavior. Users should validate the framework in their own contexts before drawing conclusions or considering operational use.
 
 Governance Is Not Automation
 
