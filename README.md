@@ -81,22 +81,19 @@ This codebase operationalizes that claim.
 Specifically:
 
 Bandit policies implement the fixed-confidence action elimination framework described in the Methods
-
 Reward functions encode predictive correctness, operational cost, and safety penalties motivated by audit evidence
-
 Simulation components emulate prospective deployment with delayed outcome feedback using MIMIC-IV ICU data
-
 Evaluation modules reproduce reported outcomes including regret, accuracy, cost, and subgroup equity
 
 The repository is not limited to the published experiment. It is designed as a reusable governance layer applicable to alternative clinical tasks, datasets, and deployment settings.
 
 Reproducibility and Ethical Use
+
 Reproducibility Commitments
 
 This repository supports computational reproducibility while respecting ethical and legal constraints of clinical data use.
 
-All governance logic, bandit policies, and evaluation metrics are deterministic given fixed configuration files and random seeds. Reference experiment configurations are provided to enable faithful reproduction of reported results using authorized access to the underlying dataset.
-
+All governance logic, bandit policies, and evaluation metrics are deterministic given fixed configuration files and random seeds. Reference experiment configurations are provided to enable faithful reproduction of reported results using authorized access to the underlying dataset. 
 Raw clinical data are not included. Users must obtain approved access to MIMIC-IV through PhysioNet and comply with all data use agreements. Data interfaces are cleanly separated from governance logic to support reproducibility without redistributing protected data.
 
 Ethical Framing and Intended Use
@@ -198,3 +195,8 @@ This framework supports adaptive control but does not replace human accountabili
 License
 
 This project is licensed under the Apache License 2.0, permitting reuse and extension for research, policy, and commercial applications with appropriate attribution.
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Dataset](https://img.shields.io/badge/dataset-MIMIC--IV-orange.svg)](https://physionet.org/content/mimiciv/)
+[![Reproducibility](https://img.shields.io/badge/reproducibility-simulation--based-green.svg)](#reproducibility-and-ethical-use)
+
