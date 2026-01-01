@@ -11,16 +11,16 @@
 
 ## Why This Exists
 
-Clinical AI rarely fails because models are inaccurate.  
-It fails because **deployment is static**.
+Clinical AI systems rarely fail because models are inaccurate.  
+They fail because **deployment is static**.
 
-Health systems routinely select a single “best” model based on retrospective validation metrics and deploy it uniformly across patients, settings, and time. This assumes that a model that performs well on average will perform safely everywhere.
+In routine practice, health systems select a single “best” model based on retrospective validation metrics and deploy it uniformly across patients, settings, and time. This implicitly assumes that a model performing well on average will perform safely across all contexts.
 
-In practice, this assumption breaks.
+This assumption does not hold.
 
-Audit studies repeatedly show that high-performing clinical models can rely on **shortcut learning**, exhibit **subgroup-specific misclassification**, and fail silently when context shifts. These are not edge cases. They are **systemic deployment failures**.
+Audit and post-deployment analyses consistently show that high-performing clinical models can rely on **shortcut learning**, exhibit **context- and subgroup-specific misclassification**, and fail silently under distributional or operational shift. These are not rare edge cases. They are **systemic deployment failures**.
 
-Yet once these failures are identified, health systems face a governance gap:
+Yet once such risks are identified, health systems encounter a governance gap:
 
 > **Audits diagnose risk, but they do not control deployment.**
 
@@ -30,8 +30,7 @@ This repository exists to close that gap.
 
 ## What This Repository Does
 
-This project implements a **governance layer for clinical AI deployment** using  
-**contextual, cost-aware multi-arm bandits**.
+This project implements a **governance layer for clinical AI deployment** using **contextual, cost-aware multi-arm bandits**.
 
 Instead of treating model selection as a one-time engineering decision, deployment is formalized as a **sequential decision problem**:
 
@@ -41,7 +40,7 @@ Instead of treating model selection as a one-time engineering decision, deployme
 - Costs and harms are asymmetric  
 - Known risks must constrain exploration  
 
-At each decision point, the system selects **which model to deploy**, not to maximize accuracy in isolation, but to **minimize regret under explicit safety and cost constraints**.
+At each decision point, the system selects **which model to deploy**, not to maximize accuracy in isolation, but to minimize regret under explicit safety and cost constraints.
 
 **This is not model training.**  
 **This is deployment control.**
@@ -51,30 +50,30 @@ At each decision point, the system selects **which model to deploy**, not to max
 ## What Makes This Different
 
 Most clinical AI research focuses on building better models.  
-This repository focuses on **using existing models safely once they are deployed**.
+This repository focuses on **deploying existing models safely and accountably**.
 
 ### Key distinctions
 
 **Audit-informed**  
-Known failure modes are encoded directly into the deployment policy. The system does not rediscover known harms through patient exposure.
+Known failure modes are encoded directly into the deployment policy. The system is designed to avoid rediscovering known harms through patient exposure.
 
 **Decision-centric**  
-Evaluation focuses on decision-level outcomes rather than aggregate accuracy metrics.
+Evaluation targets decision-level outcomes, not only aggregate metrics that can mask context-specific failures.
 
-**Risk-aware exploration**  
-Exploration is bounded, penalized, and eliminated with statistical confidence — not randomized indiscriminately.
+**Risk-bounded exploration**  
+Exploration is constrained, penalized, and eliminated with statistical confidence, rather than randomized indiscriminately.
 
 **Governance, not experimentation**  
-The policy selects among pre-approved models. It does not assign treatments or conduct clinical trials.
+The policy selects among pre-approved predictive models. It does not assign treatments and does not conduct clinical trials.
 
 > **Models predict.**  
-> **This system decides which model should be trusted, when, and for whom.**
+> **This system governs which model is used, when, and for whom.**
 
 ---
 
 ## Repository Structure
 
-This repository is organized to clearly separate **governance logic**, **simulation infrastructure**, and **evaluation artifacts**.
+This repository is organized to separate governance logic, simulation infrastructure, and evaluation artifacts.
 
 ```text
 multiarm-bandit-clinical-ai-governance/
@@ -83,32 +82,58 @@ multiarm-bandit-clinical-ai-governance/
 │   ├── decision-safety.md
 │   └── audit-integration.md
 │
-├── bandit/
-│   ├── policies/
-│   ├── rewards/
-│   ├── confidence/
-│   └── utils/
+├── analysis/
+│   └── R/
+│       ├── 00_setup.R
+│       ├── 01_data_inventory.R
+│       ├── 02_cohort_extract.R
+│       ├── 03_feature_engineering.R
+│       ├── 04_model_training.R
+│       ├── 05_bandit_simulation.R
+│       ├── 06_evaluation.R
+│       ├── 07_reporting_outputs.R
+│       └── utils.R
 │
-├── simulation/
-│   ├── data_interface.py
-│   ├── context_builder.py
-│   ├── delayed_feedback.py
-│   └── run_simulation.py
+├── notebooks/
+│   └── scratch/
 │
-├── models/
-│   ├── logistic_regression.py
-│   ├── gradient_boosting.py
-│   └── neural_network.py
+├── data/
+│   ├── raw/
+│   │   ├── README.md
+│   │   └── .gitkeep
+│   ├── processed/
+│   │   └── .gitkeep
+│   ├── cohort/
+│   │   └── .gitkeep
+│   └── features/
+│       └── .gitkeep
 │
-├── evaluation/
-│   ├── metrics.py
-│   ├── subgroup_analysis.py
-│   └── reporting.py
+├── output/
+│   ├── figure_01_data_inventory.png
+│   ├── table_01_data_inventory.csv
+│   └── logs/
+│       └── pipeline.log
 │
-├── experiments/
-│   └── mimic_iv_icu_mortality.yaml
+├── reports/
+│   ├── manuscript_figures/
+│   │   └── .gitkeep
+│   ├── manuscript_tables/
+│   │   └── .gitkeep
+│   └── supplementary/
+│       └── .gitkeep
 │
-├── README.md
+├── documents/
+│   ├── figures/
+│   │   ├── architecture/
+│   │   ├── governance/
+│   │   ├── methods/
+│   │   └── results/
+│   ├── images/
+│   │   ├── diagrams/
+│   │   ├── slides/
+│   │   └── icons/
+│   └── README.md
+│
 ├── LICENSE
 ├── .gitignore
 └── CITATION.cff
