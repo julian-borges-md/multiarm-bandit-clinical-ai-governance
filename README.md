@@ -137,3 +137,30 @@ multiarm-bandit-clinical-ai-governance/
 ├── LICENSE
 ├── .gitignore
 └── CITATION.cff
+
+
+## Reproducibility guarantees
+
+- All package versions are locked using renv  
+- All file paths are project relative using here  
+
+
+---
+
+## Run the entire analysis in one command
+
+From the project root:
+
+Rscript -e 'renv::restore(); \
+
+
+
+# Disclosure and Reproducibility Statement
+This study was conducted solely by the author and received no external funding or financial support. The author declares no competing interests. All analyses were performed using publicly available, fully de identified datasets and did not involve human participants, clinical interventions, or identifiable personal data. Accordingly, institutional review board approval and informed consent were not required.
+Model development and evaluation were implemented through a fully scripted and version controlled analytic pipeline designed to ensure transparency, auditability, and reproducibility. All performance estimates were derived exclusively from pooled out of fold predictions generated under five fold cross validation, thereby avoiding in sample or single split inflation. Class imbalance handling and preprocessing steps were confined strictly to training folds to prevent information leakage.
+Interpretable baseline models were intentionally prioritized, and validation practices were aligned with principles articulated in FDA Good Machine Learning Practice guidance, emphasizing conservative evaluation, clear operating characteristics, and clinically inspectable behavior.
+All code, analytic procedures, and intermediate outputs are publicly available to support independent replication. The author welcomes correspondence regarding methodological details, reproducibility, and potential extensions of this work.
+
+# Corresponding Author
+Julian Borges, MD, MSc Physician Scientist MS in Health Informatics Candidate Boston University Boston, MA, United States
+Email: jyborges@bu.edu
