@@ -1,166 +1,112 @@
-# Multi-Arm Bandit Governance for Clinical AI  
-### From Static Deployment to Decision-Safe Control
-
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Dataset](https://img.shields.io/badge/dataset-MIMIC--IV-orange.svg)](https://physionet.org/content/mimiciv/)
-[![Reproducibility](https://img.shields.io/badge/reproducibility-simulation--based-green.svg)](#reproducibility-and-ethical-use)
-[![Governance](https://img.shields.io/badge/governance-decision--safety%20%7C%20audit--informed-purple.svg)](#what-makes-this-different)
-[![Status](https://img.shields.io/badge/status-research-lightgrey.svg)](#)
+# Multi Armed Bandit Based Adaptive Model Selection for Clinical AI Governance  
+### From Static Deployment to Decision Safe Control
 
 ---
 
-## Why This Exists
+## Overview
 
-Clinical AI systems rarely fail because models are inaccurate.  
-They fail because **deployment is static**.
+This repository provides a **software framework for simulation based evaluation of deployment governance strategies in clinical artificial intelligence systems**. The framework implements **contextual, cost aware multi armed bandit methods** to support adaptive model selection among multiple pre trained and validated predictive models.
 
-In routine practice, health systems select a single “best” model based on retrospective validation metrics and deploy it uniformly across patients, settings, and time. This implicitly assumes that a model performing well on average will perform safely across all contexts.
+The software is designed to study **deployment governance**, not model development. It enables researchers to evaluate how different model selection policies behave under uncertainty, delayed outcome feedback, and explicit safety and cost constraints.
 
-This assumption does not hold.
-
-Audit and post-deployment analyses consistently show that high-performing clinical models can rely on **shortcut learning**, exhibit **context- and subgroup-specific misclassification**, and fail silently under distributional or operational shift. These are not rare edge cases. They are **systemic deployment failures**.
-
-Yet once such risks are identified, health systems encounter a governance gap:
-
-> **Audits diagnose risk, but they do not control deployment.**
-
-This repository exists to close that gap.
+This resource is intended for **methodological research, audit informed governance studies, and reproducible evaluation of adaptive deployment strategies** in health informatics and other safety critical domains.
 
 ---
 
-## What This Repository Does
+## Why This Repository Exists
 
-This project implements a **governance layer for clinical AI deployment** using **contextual, cost-aware multi-arm bandits**.
+Clinical AI systems are commonly deployed using **static model selection strategies**, where a single model is chosen based on retrospective validation metrics and applied uniformly across contexts. Evidence from auditing and post deployment analyses has shown that such strategies can mask **context specific misclassification patterns, shortcut learning, and operational failure modes**.
 
-Instead of treating model selection as a one-time engineering decision, deployment is formalized as a **sequential decision problem**:
+While audit methods can identify these risks, they do not provide a mechanism for **controlling model exposure during deployment**. This repository was developed to support systematic investigation of **adaptive deployment governance mechanisms** using sequential decision making frameworks.
 
-- Multiple validated models coexist  
-- Patient context varies  
-- Outcomes arrive with delay  
-- Costs and harms are asymmetric  
-- Known risks must constrain exploration  
-
-At each decision point, the system selects **which model to deploy**, not to maximize accuracy in isolation, but to minimize regret under explicit safety and cost constraints.
-
-**This is not model training.**  
-**This is deployment control.**
+The central premise is that **model selection itself is a governance problem**, distinct from model training or clinical intervention.
 
 ---
 
-## What Makes This Different
+## What the Software Provides
 
-Most clinical AI research focuses on building better models.  
-This repository focuses on **deploying existing models safely and accountably**.
+The framework implements **multi armed bandit based governance logic** that treats model selection as a sequential decision process:
 
-### Key distinctions
+- Multiple validated predictive models coexist  
+- Patient and operational context varies  
+- Outcome feedback may be delayed  
+- Operational costs and safety considerations are explicit  
+- Exploration is constrained by predefined governance rules  
 
-**Audit-informed**  
-Known failure modes are encoded directly into the deployment policy. The system is designed to avoid rediscovering known harms through patient exposure.
+At each simulated decision point, the system selects **which model to deploy** according to a fixed confidence, audit informed policy. The objective is not to optimize predictive accuracy in isolation, but to evaluate **decision level behavior under governance defined constraints**.
 
-**Decision-centric**  
-Evaluation targets decision-level outcomes, not only aggregate metrics that can mask context-specific failures.
+**This software does not train models and does not perform clinical decision making.**
 
-**Risk-bounded exploration**  
-Exploration is constrained, penalized, and eliminated with statistical confidence, rather than randomized indiscriminately.
+---
 
-**Governance, not experimentation**  
-The policy selects among pre-approved predictive models. It does not assign treatments and does not conduct clinical trials.
+## Design Principles
 
-> **Models predict.**  
-> **This system governs which model is used, when, and for whom.**
+**Governance oriented**  
+The framework is explicitly designed to evaluate deployment control policies rather than predictive model performance alone.
+
+**Audit informed**  
+Known failure patterns and safety considerations can be encoded into reward definitions and elimination rules.
+
+**Decision level evaluation**  
+Evaluation focuses on decision sequences, regret, and exposure patterns rather than aggregate summary metrics.
+
+**Simulation first**  
+All analyses are conducted using retrospective simulation to enable ethical evaluation prior to any clinical consideration.
 
 ---
 
 ## Repository Structure
 
-This repository is organized to separate governance logic, simulation infrastructure, and evaluation artifacts.
-
 ```text
 multiarm-bandit-clinical-ai-governance/
-├── docs/
-│   ├── governance-framework.md
-│   ├── decision-safety.md
-│   └── audit-integration.md
-│
+├── docs/                     # Conceptual documentation and governance rationale
 ├── analysis/
-│   └── R/
-│       ├── 00_setup.R
-│       ├── 01_data_inventory.R
-│       ├── 02_cohort_extract.R
-│       ├── 03_feature_engineering.R
-│       ├── 04_model_training.R
-│       ├── 05_bandit_simulation.R
-│       ├── 06_evaluation.R
-│       ├── 07_reporting_outputs.R
-│       └── utils.R
-│
-├── notebooks/
-│   └── scratch/
-│
+│   └── R/                    # Simulation pipeline and evaluation scripts
+├── notebooks/                # Development and exploratory notebooks (optional)
 ├── data/
-│   ├── raw/
-│   │   ├── README.md
-│   │   └── .gitkeep
-│   ├── processed/
-│   │   └── .gitkeep
-│   ├── cohort/
-│   │   └── .gitkeep
-│   └── features/
-│       └── .gitkeep
-│
-├── output/
-│   ├── figure_01_data_inventory.png
-│   ├── table_01_data_inventory.csv
-│   └── logs/
-│       └── pipeline.log
-│
-├── reports/
-│   ├── manuscript_figures/
-│   │   └── .gitkeep
-│   ├── manuscript_tables/
-│   │   └── .gitkeep
-│   └── supplementary/
-│       └── .gitkeep
-│
-├── documents/
-│   ├── figures/
-│   │   ├── architecture/
-│   │   ├── governance/
-│   │   ├── methods/
-│   │   └── results/
-│   ├── images/
-│   │   ├── diagrams/
-│   │   ├── slides/
-│   │   └── icons/
-│   └── README.md
-│
+│   └── README.md             # Placeholder only; no data are included
+├── output/                   # Generated artifacts (not for redistribution)
+├── reports/                  # Manuscript figures and tables (optional)
 ├── LICENSE
-├── .gitignore
-└── CITATION.cff
+├── CITATION.cff
+└── README.md
+No patient level data are included in this repository.
 
+Data Access and Requirements
+This repository does not contain clinical data.
 
-## Reproducibility guarantees
+Users must obtain independent, approved access to credentialed PhysioNet datasets (such as MIMIC IV) to reproduce simulations. All cohort construction and feature extraction steps are performed locally by the user after data access approval.
 
-- All package versions are locked using renv  
-- All file paths are project relative using here  
+Reproducibility
+Package versions are locked using renv
 
+All paths are project relative
 
----
+Simulation scripts are fully scripted and version controlled
 
-## Run the entire analysis in one command
+These measures are intended to support transparent, auditable reproduction by qualified users.
 
-From the project root:
+Intended Use and Limitations
+This software is intended for:
 
-Rscript -e 'renv::restore(); \
+Simulation based evaluation of deployment governance strategies
 
+Methodological research in adaptive decision systems
 
+Audit and safety oriented informatics research
 
-# Disclosure and Reproducibility Statement
-This study was conducted solely by the author and received no external funding or financial support. The author declares no competing interests. All analyses were performed using publicly available, fully de identified datasets and did not involve human participants, clinical interventions, or identifiable personal data. Accordingly, institutional review board approval and informed consent were not required.
-Model development and evaluation were implemented through a fully scripted and version controlled analytic pipeline designed to ensure transparency, auditability, and reproducibility. All performance estimates were derived exclusively from pooled out of fold predictions generated under five fold cross validation, thereby avoiding in sample or single split inflation. Class imbalance handling and preprocessing steps were confined strictly to training folds to prevent information leakage.
-Interpretable baseline models were intentionally prioritized, and validation practices were aligned with principles articulated in FDA Good Machine Learning Practice guidance, emphasizing conservative evaluation, clear operating characteristics, and clinically inspectable behavior.
-All code, analytic procedures, and intermediate outputs are publicly available to support independent replication. The author welcomes correspondence regarding methodological details, reproducibility, and potential extensions of this work.
+This software is not intended for clinical deployment, real time decision support, or patient care. Any extension beyond retrospective simulation requires independent validation, governance review, and institutional oversight.
 
-# Corresponding Author
-Julian Borges, MD, MSc Physician Scientist MS in Health Informatics Candidate Boston University Boston, MA, United States
+Ethics and Compliance
+This project involves secondary use of fully deidentified electronic health record data accessed under approved PhysioNet credentialing. No new data collection was performed. Because the work is limited to retrospective simulation and does not involve patient intervention or prospective deployment, institutional review board approval and informed consent were not required.
+
+License
+This project is released under the terms specified in the LICENSE file.
+
+Correspondence
+Julian Borges, MD, MSc
+Physician Scientist
+MS in Health Informatics Candidate
+Boston University
+Boston, MA, United States
 Email: jyborges@bu.edu
