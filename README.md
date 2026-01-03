@@ -1,6 +1,13 @@
 # Multi Armed Bandit Based Adaptive Model Selection for Clinical AI Governance  
 ### From Static Deployment to Decision Safe Control
 
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Dataset](https://img.shields.io/badge/dataset-PhysioNet%20MIMIC--IV-orange.svg)](https://physionet.org/content/mimiciv/)
+[![Study Type](https://img.shields.io/badge/study-simulation--based%20governance-green.svg)](#overview)
+[![Reproducibility](https://img.shields.io/badge/reproducibility-version--locked%20pipeline-brightgreen.svg)](#reproducibility)
+[![Governance](https://img.shields.io/badge/focus-deployment%20governance%20%7C%20decision--safety-purple.svg)](#design-principles)
+[![Status](https://img.shields.io/badge/status-research-lightgrey.svg)](#)
+
 ---
 
 ## Overview
@@ -42,13 +49,13 @@ At each simulated decision point, the system selects **which model to deploy** a
 ## Design Principles
 
 **Governance oriented**  
-The framework is explicitly designed to evaluate deployment control policies rather than predictive model performance alone.
+The framework evaluates deployment control policies rather than predictive performance alone.
 
 **Audit informed**  
 Known failure patterns and safety considerations can be encoded into reward definitions and elimination rules.
 
 **Decision level evaluation**  
-Evaluation focuses on decision sequences, regret, and exposure patterns rather than aggregate summary metrics.
+Evaluation focuses on decision sequences, regret, and exposure patterns rather than aggregate metrics.
 
 **Simulation first**  
 All analyses are conducted using retrospective simulation to enable ethical evaluation prior to any clinical consideration.
@@ -75,7 +82,7 @@ No patient level data are included in this repository.
 Data Access and Requirements
 This repository does not contain clinical data.
 
-Users must obtain independent, approved access to credentialed PhysioNet datasets (such as MIMIC IV) to reproduce simulations. All cohort construction and feature extraction steps are performed locally by the user after data access approval.
+Users must obtain independent, approved access to credentialed PhysioNet datasets such as MIMIC IV to reproduce simulations. All cohort construction and feature extraction steps are performed locally by the user after data access approval.
 
 Reproducibility
 Package versions are locked using renv
