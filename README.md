@@ -69,7 +69,7 @@ multiarm-bandit-clinical-ai-governance/
 ├── docs/                     # Conceptual documentation and governance rationale
 ├── analysis/
 │   └── R/                    # Simulation pipeline and evaluation scripts
-├── notebooks/                # Development and exploratory notebooks (optional)
+├── notebooks/                # Development and exploratory notebooks
 ├── data/
 │   └── README.md             # Placeholder only; no data are included
 ├── output/                   # Generated artifacts (not for redistribution)
