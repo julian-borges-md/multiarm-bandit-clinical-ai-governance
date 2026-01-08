@@ -79,41 +79,39 @@ multiarm-bandit-clinical-ai-governance/
 └── README.md
 No patient level data are included in this repository.
 
-Data Access and Requirements
+##Data Access and Requirements
 This repository does not contain clinical data.
 
 Users must obtain independent, approved access to credentialed PhysioNet datasets such as MIMIC IV to reproduce simulations. All cohort construction and feature extraction steps are performed locally by the user after data access approval.
 
-Reproducibility
+##Reproducibility
+
 Package versions are locked using renv
-
 All paths are project relative
-
 Simulation scripts are fully scripted and version controlled
-
 These measures are intended to support transparent, auditable reproduction by qualified users.
 
-Intended Use and Limitations
+##Intended Use and Limitations
+
 This software is intended for:
-
 Simulation based evaluation of deployment governance strategies
-
 Methodological research in adaptive decision systems
-
 Audit and safety oriented informatics research
 
 This software is not intended for clinical deployment, real time decision support, or patient care. Any extension beyond retrospective simulation requires independent validation, governance review, and institutional oversight.
 
-Ethics and Compliance
+##Ethics and Compliance
+
 This project involves secondary use of fully deidentified electronic health record data accessed under approved PhysioNet credentialing. No new data collection was performed. Because the work is limited to retrospective simulation and does not involve patient intervention or prospective deployment, institutional review board approval and informed consent were not required.
 
-License
+##License
+
 This project is released under the terms specified in the LICENSE file.
 
-Correspondence
-Julian Borges, MD, MSc
-Physician Scientist
-MS in Health Informatics Candidate
-Boston University
-Boston, MA, United States
-Email: jyborges@bu.edu
+## Author
+
+**Julian Borges, MD, MS**  
+MS Health Informatics'27, Computer Science Department
+Boston University, Clinician Scientist
+GCSRT 2025, Harvard Medical School  
+📧 jyborges@bu.edu
