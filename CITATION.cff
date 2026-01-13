@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Multi Arm Bandit Governance for Clinical AI"
+type: software
+authors:
+  - family-names: "Borges"
+    given-names: "Julian"
+    name-suffix: "MD, MS"
+repository-code: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
+url: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
+license: "Apache-2.0"
+keywords:
+  - "clinical AI"
+  - "AI governance"
+  - "multi-armed bandits"
+  - "deployment governance"
+  - "decision safety"
+  - "MIMIC-IV"
+  - "simulation study"
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "Borges"
+      given-names: "Julian"
+      name-suffix: "MD, MS"
+  title: "Multi Arm Bandit Governance for Clinical AI"
+  year: 2026
+  url: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
