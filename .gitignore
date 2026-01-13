@@ -3,6 +3,10 @@ outputs/data/
 outputs/models/
 outputs/cache_raw/
 
+# ---- Local machine specific configuration ----
+config/paths.yml
+
+
 # ---- Logs and temporary files ----
 *.log
 *.tmp
