@@ -105,22 +105,23 @@ Running source("analysis/R/00_run_all.R") executes the full pipeline end to end 
 
 ## Repository Structure
 
-multiarm-bandit-clinical-ai-governance  
-analysis  
-R end to end reproducible R pipeline  
-docs governance rationale and conceptual documentation  
-config governance parameters weights seeds  
-outputs  
-data derived datasets not committed  
-models trained model objects not committed  
-tables manuscript ready tables CSV  
-figures manuscript ready figures PNG PDF  
-logs execution logs  
-cache_raw intermediate cached artifacts  
-.gitignore  
-LICENSE  
-CITATION.cff  
-README.md  
+```text
+multiarm-bandit-clinical-ai-governance/
+├── analysis/
+│   └── R/                         End to end reproducible R pipeline
+├── docs/                          Governance rationale and conceptual documentation
+├── config/                        Governance parameters, weights, and fixed seeds
+├── outputs/
+│   ├── data/                      Derived datasets (not committed)
+│   ├── models/                    Trained model objects (not committed)
+│   ├── tables/                    Manuscript ready tables (CSV)
+│   ├── figures/                   Manuscript ready figures (PNG, PDF)
+│   ├── logs/                      Execution logs
+│   └── cache_raw/                 Intermediate cached artifacts
+├── .gitignore
+├── LICENSE
+├── CITATION.cff
+└── README.md
 
 The gitignore file excludes patient level data trained models and cached intermediates to prevent accidental disclosure.
 
