@@ -255,3 +255,4 @@ message("Static best model column: ", static_best_col)
 message("Outcome column used: ", y_col)
 message("Done. Results in: ", RESULTS_DIR)
 message("Figure in: ", FIG_DIR)
+
