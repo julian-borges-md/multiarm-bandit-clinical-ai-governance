@@ -112,6 +112,8 @@ analysis/R/
 ├── 03_train_models.R              Baseline model training and prediction
 ├── 04_run_bandit_simulation.R     Governance simulation with delayed feedback
 └── 05_make_tables_figures.R       Manuscript ready outputs
+
+```
 Running:
 
 source("analysis/R/00_run_all.R")
