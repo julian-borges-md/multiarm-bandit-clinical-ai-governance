@@ -110,6 +110,7 @@ multiarm-bandit-clinical-ai-governance/
 ├── analysis/
 │   └── R/                         End to end reproducible R pipeline
 ├── docs/                          Governance rationale and conceptual documentation
+├── docker/                        Add optional Dockerfile for reproducible R environment
 ├── config/                        Governance parameters, weights, and fixed seeds
 ├── outputs/
 │   ├── data/                      Derived datasets (not committed)
