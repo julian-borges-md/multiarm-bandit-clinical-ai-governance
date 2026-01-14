@@ -1,0 +1,257 @@
+# ==============================
+# 06_make_comparator_results.R  
+# ==============================
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(ggplot2)
+  library(scales)
+})
+
+get_outputs_root <- function() {
+  if (exists("OUTPUTS_ROOT", inherits = TRUE)) return(get("OUTPUTS_ROOT", inherits = TRUE))
+  if (requireNamespace("here", quietly = TRUE)) return(file.path(here::here(), "outputs"))
+  file.path(getwd(), "outputs")
+}
+
+OUTPUTS_ROOT <- get_outputs_root()
+
+CACHE_RAW_DIR <- file.path(OUTPUTS_ROOT, "cache_raw")
+RESULTS_DIR   <- file.path(OUTPUTS_ROOT, "results")
+FIG_DIR       <- file.path(OUTPUTS_ROOT, "figures")
+
+dir.create(RESULTS_DIR, recursive = TRUE, showWarnings = FALSE)
+dir.create(FIG_DIR, recursive = TRUE, showWarnings = FALSE)
+
+read_dt <- function(path) {
+  if (!file.exists(path)) stop("Missing file: ", path)
+  data.table::fread(path)
+}
+
+write_result <- function(dt, filename) {
+  out_path <- file.path(RESULTS_DIR, filename)
+  data.table::fwrite(dt, out_path)
+  message("Wrote results: ", out_path)
+  invisible(out_path)
+}
+
+save_plot <- function(p, filename, width = 7.8, height = 5.0, dpi = 300, overwrite = FALSE) {
+  out_path <- file.path(FIG_DIR, filename)
+  if (file.exists(out_path) && !overwrite) {
+    message("Figure exists, skipping: ", out_path)
+    return(invisible(out_path))
+  }
+  ggsave(out_path, plot = p, width = width, height = height, dpi = dpi)
+  message("Wrote figure: ", out_path)
+  invisible(out_path)
+}
+
+pick_col <- function(dt, candidates, required = TRUE) {
+  hits <- candidates[candidates %in% names(dt)]
+  if (length(hits) == 0L) {
+    if (required) stop("Could not find any of these columns: ", paste(candidates, collapse = ", "))
+    return(NA_character_)
+  }
+  hits[[1]]
+}
+
+log_loss <- function(p, y) {
+  p <- pmin(pmax(p, 1e-6), 1 - 1e-6)
+  -(y * log(p) + (1 - y) * log(1 - p))
+}
+
+acc_from_prob <- function(p, y, thr = 0.5) {
+  as.integer((p >= thr) == (y == 1L))
+}
+
+fnr_from_prob <- function(p, y, thr = 0.5) {
+  pred <- as.integer(p >= thr)
+  denom <- sum(y == 1L, na.rm = TRUE)
+  if (denom == 0L) return(NA_real_)
+  sum(pred == 0L & y == 1L, na.rm = TRUE) / denom
+}
+
+# ----------------------------
+# Load cache_raw artifacts
+# ----------------------------
+preds  <- read_dt(file.path(CACHE_RAW_DIR, "preds_eval.csv"))
+bandit <- read_dt(file.path(CACHE_RAW_DIR, "bandit_trace.csv"))
+
+# ----------------------------
+# Identify outcome and prediction columns
+# ----------------------------
+
+# CHANGE HERE: include mort_hosp and similar common names
+y_col <- pick_col(
+  preds,
+  c(
+    "mort_hosp", "hosp_mort", "hospital_mortality",
+    "mortality_hosp", "mort", "death_hosp",
+    "y", "label", "outcome", "mortality", "death", "died"
+  ),
+  required = TRUE
+)
+
+preferred <- c("pred_glm", "pred_rf", "pred_xgb")
+pred_cols <- preferred[preferred %in% names(preds)]
+if (length(pred_cols) < 2L) pred_cols <- grep("^pred_", names(preds), value = TRUE)
+if (length(pred_cols) < 2L) stop("Need at least two pred_* columns in preds_eval.csv")
+
+# Stable time index
+t_col_preds <- pick_col(preds, c("t", "step", "idx", "time_index"), required = FALSE)
+if (!is.na(t_col_preds)) preds[, t_plot := get(t_col_preds)] else preds[, t_plot := .I]
+
+# ----------------------------
+# Join bandit trace to preds to recover bandit chosen arm
+# ----------------------------
+chosen_col <- pick_col(bandit, c("chosen_arm", "arm", "selected_arm", "action", "chosen_model"), required = TRUE)
+
+key_candidates <- c("stay_id", "icustay_id", "hadm_id", "subject_id", "row_id")
+key_col <- intersect(key_candidates, intersect(names(preds), names(bandit)))
+
+if (length(key_col) >= 1L) {
+  key_col <- key_col[[1]]
+  dt <- merge(preds, bandit[, c(key_col, chosen_col), with = FALSE], by = key_col, all.x = TRUE)
+  setnames(dt, chosen_col, "chosen")
+} else {
+  # fallback: row alignment
+  dt <- copy(preds)
+  dt[, chosen := bandit[[chosen_col]]]
+}
+
+# Normalize chosen labels into prediction column names
+if (is.numeric(dt$chosen)) {
+  k <- length(pred_cols)
+  dt[, chosen_name := pred_cols[pmin(pmax(as.integer(chosen), 1L), k)]]
+} else {
+  dt[, chosen_name := as.character(chosen)]
+  dt[!chosen_name %in% pred_cols & paste0("pred_", chosen_name) %in% pred_cols,
+     chosen_name := paste0("pred_", chosen_name)]
+}
+
+# Outcome
+dt[, y := as.integer(get(y_col))]
+
+# ----------------------------
+# Per-model loss and oracle
+# ----------------------------
+for (pc in pred_cols) dt[, paste0("loss_", pc) := log_loss(get(pc), y)]
+loss_mat <- dt[, lapply(pred_cols, function(pc) get(paste0("loss_", pc)))]
+loss_dt  <- as.data.table(loss_mat)
+dt[, oracle_loss := do.call(pmin, c(loss_dt, na.rm = TRUE))]
+
+# ----------------------------
+# Policies
+# ----------------------------
+mean_losses <- dt[, sapply(pred_cols, function(pc) mean(get(paste0("loss_", pc)), na.rm = TRUE))]
+static_best_col <- names(which.min(mean_losses))
+
+set.seed(20260113)
+dt[, rand_choice := sample(pred_cols, .N, replace = TRUE)]
+
+dt[, ens_prob := Reduce(`+`, lapply(pred_cols, function(pc) get(pc))) / length(pred_cols)]
+
+dt[, heur_choice := fifelse(ens_prob >= 0.20, static_best_col, pred_cols[[1]])]
+
+# ----------------------------
+# Loss streams
+# ----------------------------
+dt[, loss_bandit := NA_real_]
+for (pc in pred_cols) dt[chosen_name == pc, loss_bandit := get(paste0("loss_", pc))]
+
+dt[, loss_static := get(paste0("loss_", static_best_col))]
+
+dt[, loss_random := NA_real_]
+for (pc in pred_cols) dt[rand_choice == pc, loss_random := get(paste0("loss_", pc))]
+
+dt[, loss_ensemble := log_loss(ens_prob, y)]
+
+dt[, loss_heuristic := NA_real_]
+for (pc in pred_cols) dt[heur_choice == pc, loss_heuristic := get(paste0("loss_", pc))]
+
+# ----------------------------
+# Regret time series builder
+# ----------------------------
+make_regret_ts <- function(loss_col, strategy_name) {
+  x <- dt[, .(t = t_plot, loss = get(loss_col), oracle_loss = oracle_loss)]
+  x[is.na(loss), loss := oracle_loss]
+  x[, regret_inc := loss - oracle_loss]
+  x[is.na(regret_inc), regret_inc := 0]
+  setorder(x, t)
+  x[, regret_cum := cumsum(regret_inc)]
+  x[, strategy := strategy_name]
+  x[, .(t, strategy, regret_cum, regret_inc, loss, oracle_loss)]
+}
+
+reg_all <- rbindlist(list(
+  make_regret_ts("loss_bandit",    "Contextual bandit"),
+  make_regret_ts("loss_static",    paste0("Static best (", static_best_col, ")")),
+  make_regret_ts("loss_random",    "Uniform random"),
+  make_regret_ts("loss_ensemble",  "Ensemble average"),
+  make_regret_ts("loss_heuristic", "Heuristic switching")
+), use.names = TRUE)
+
+write_result(reg_all, "regret_timeseries_all_strategies.csv")
+
+# ----------------------------
+# Strategy summary table
+# ----------------------------
+summarize_policy <- function(prob, loss, strategy_name) {
+  dtm <- data.table(y = dt$y, prob = prob, loss = loss)
+  dtm[, acc := acc_from_prob(prob, y)]
+  data.table(
+    strategy = strategy_name,
+    mean_loss = mean(dtm$loss, na.rm = TRUE),
+    accuracy  = mean(dtm$acc,  na.rm = TRUE),
+    fnr       = fnr_from_prob(dtm$prob, dtm$y),
+    cumulative_regret = reg_all[strategy == strategy_name][order(t)][.N, regret_cum]
+  )
+}
+
+prob_bandit <- dt[, {
+  p <- rep(NA_real_, .N)
+  for (pc in pred_cols) p[chosen_name == pc] <- get(pc)[chosen_name == pc]
+  p
+}]
+prob_static   <- dt[[static_best_col]]
+prob_random <- dt[, {
+  p <- rep(NA_real_, .N)
+  for (pc in pred_cols) p[rand_choice == pc] <- get(pc)[rand_choice == pc]
+  p
+}]
+prob_ensemble <- dt$ens_prob
+prob_heuristic <- dt[, {
+  p <- rep(NA_real_, .N)
+  for (pc in pred_cols) p[heur_choice == pc] <- get(pc)[heur_choice == pc]
+  p
+}]
+
+summary_dt <- rbindlist(list(
+  summarize_policy(prob_bandit,    dt$loss_bandit,    "Contextual bandit"),
+  summarize_policy(prob_static,    dt$loss_static,    paste0("Static best (", static_best_col, ")")),
+  summarize_policy(prob_random,    dt$loss_random,    "Uniform random"),
+  summarize_policy(prob_ensemble,  dt$loss_ensemble,  "Ensemble average"),
+  summarize_policy(prob_heuristic, dt$loss_heuristic, "Heuristic switching")
+), use.names = TRUE)
+
+write_result(summary_dt, "strategy_summary.csv")
+
+# ----------------------------
+# Figure: cumulative regret comparison
+# ----------------------------
+p <- ggplot(reg_all, aes(x = t, y = regret_cum, color = strategy)) +
+  geom_line(linewidth = 0.9) +
+  labs(
+    title = "Cumulative regret comparison across deployment strategies",
+    x = "Sequential ICU admissions",
+    y = "Cumulative regret",
+    color = "Strategy"
+  ) +
+  theme_minimal(base_size = 12)
+
+save_plot(p, "figure_regret_comparison.png", overwrite = FALSE)
+
+message("Static best model column: ", static_best_col)
+message("Outcome column used: ", y_col)
+message("Done. Results in: ", RESULTS_DIR)
+message("Figure in: ", FIG_DIR)
