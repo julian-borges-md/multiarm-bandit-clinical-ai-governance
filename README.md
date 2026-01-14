@@ -113,7 +113,7 @@ analysis/R/
 ├── 04_run_bandit_simulation.R     Governance simulation with delayed feedback
 └── 05_make_tables_figures.R       Manuscript ready outputs
 
-```
+
 Running:
 
 source("analysis/R/00_run_all.R")
@@ -139,7 +139,7 @@ multiarm-bandit-clinical-ai-governance/
 ├── CITATION.cff
 └── README.md
 The `.gitignore` file excludes patient level data, trained models, and cached intermediates to prevent accidental disclosure.
-
+```
 ---
 
 ## Data Access and Requirements
