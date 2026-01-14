@@ -143,6 +143,18 @@ Together these measures support transparent and auditable reproduction by qualif
 
 ---
 
+## Containerization (Optional)
+
+For users who prefer a containerized environment, this project is compatible with Docker based execution.
+
+Containerization is provided as an optional convenience to support environment consistency and ease of setup. It is not required to reproduce the results, and all analyses can be run directly in a local R environment using the provided scripts and version locked dependencies.
+
+When used, Docker containers are intended to encapsulate the R runtime and package dependencies only. Access to credentialed datasets such as MIMIC IV must still be configured locally by the user and mounted into the container in accordance with PhysioNet data use agreements.
+
+At present, Docker support is provided on a best effort basis and does not replace the primary, script driven reproducibility pathway described above.
+
+---
+
 ## Intended Use and Limitations
 
 This software is intended for simulation based evaluation of deployment governance strategies, methodological research in adaptive and sequential decision systems, and audit and safety oriented clinical informatics research.
