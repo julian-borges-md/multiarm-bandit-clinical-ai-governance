@@ -1,0 +1,3 @@
+paths:
+  mimic_iv_root: "/path/to/mimic-iv"
+  outputs_root: "outputs"

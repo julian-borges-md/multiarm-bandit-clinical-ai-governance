@@ -1,0 +1,247 @@
+# Multi Arm Bandit Governance for Clinical AI  
+### From Static Deployment to Decision Safe Control
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Dataset](https://img.shields.io/badge/dataset-PhysioNet%20MIMIC--IV-orange.svg)](https://physionet.org/content/mimiciv/)
+[![Study Type](https://img.shields.io/badge/study-simulation%20based%20governance-green.svg)](#overview)
+[![Reproducibility](https://img.shields.io/badge/reproducibility-version%20locked%20pipeline-brightgreen.svg)](#reproducibility)
+[![Focus](https://img.shields.io/badge/focus-deployment%20governance%20and%20decision%20safety-purple.svg)](#governance-design-principles)
+[![Status](https://img.shields.io/badge/status-research-lightgrey.svg)](#)
+
+**Archived release (Zenodo DOI):**  
+https://doi.org/10.5281/zenodo.18248286  
+
+---
+
+## Overview
+
+This repository provides a fully reproducible software framework for simulation based evaluation of deployment governance strategies in clinical artificial intelligence systems.
+
+The framework implements contextual, cost aware multi arm bandit policies to support adaptive model selection among multiple pre trained and independently validated predictive models. The contribution of this project is deployment governance rather than predictive model development.
+
+The repository enables systematic study of how deployment policies behave under patient and operational heterogeneity, delayed outcome feedback, explicit safety and cost constraints, and fixed confidence decision rules.
+
+This resource is intended for methodological research, audit informed governance studies, and reproducible evaluation of adaptive deployment strategies in clinical informatics and other safety critical domains.
+
+---
+
+## Why This Repository Exists
+
+Clinical AI systems are commonly deployed using static model selection strategies, where a single model is chosen based on retrospective validation metrics and applied uniformly across patients, settings, and time.
+
+Audit based research has demonstrated that such deployment approaches can obscure context specific misclassification patterns, shortcut learning and proxy signal reliance, subgroup specific safety risks, and operational inefficiencies.
+
+Audits diagnose risk but do not provide mechanisms for controlling model exposure during deployment. This repository exists to evaluate adaptive governance mechanisms that translate audit insights into operational control.
+
+**Core premise:** model selection is a governance problem, distinct from model training and distinct from clinical intervention.
+
+---
+
+## What the Software Provides
+
+The framework treats model selection as a sequential decision problem in which multiple validated predictive models coexist, patient context varies across decisions, outcome feedback is delayed, safety and operational cost priorities are explicit, and model exposure is governed by confidence based elimination.
+
+At each simulated decision point, the governance layer selects which model to deploy according to a fixed confidence, audit informed policy. No predictive model parameters are updated during simulation.
+
+This software does not provide clinical decision support and is not intended for real time patient care.
+
+---
+
+## Governance Design Principles
+
+**Governance oriented**  
+Focuses on deployment control rather than predictive accuracy optimization.
+
+**Audit informed**  
+Encodes known failure patterns, safety priorities, and cost constraints into governance logic.
+
+**Fixed confidence control**  
+Uses conservative action elimination to limit unsafe exposure rather than aggressive exploration.
+
+**Decision level evaluation**  
+Evaluates regret, safety outcomes, operational cost, exposure, and subgroup consistency.
+
+**Simulation first**  
+Uses retrospective simulation as an ethical prerequisite prior to any live deployment.
+
+**Reproducible by design**  
+Implements deterministic cohort selection, fixed random seeds, and version locked environments.
+
+A detailed rationale for these design choices is provided in `docs/governance-design-rationale.md`.
+
+---
+
+## Health Impact and Care Process Relevance
+
+Although this framework evaluates deployment governance rather than clinical intervention, the simulated outcomes correspond directly to care process impacts. These include reduced clinically harmful false negative predictions, improved reliability of AI assisted decisions over time, lower operational cost per prediction, and reduced inequitable exposure to unsafe model behavior.
+
+These represent measurable improvements in decision safety, efficiency, and equity at the population level within a United States based critical care cohort.
+
+---
+
+## Pipeline Outputs and Generated Artifacts
+
+All results reported in the associated manuscript are generated programmatically by the R scripts located in `analysis/R`. No manual data manipulation, interactive steps, or post hoc editing are required.
+
+Key outputs generated by the pipeline include:
+
+- Cohort flow and summary tables  
+- Feature completeness diagnostics  
+- Baseline model performance metrics  
+- Governance simulation traces  
+- Regret, safety, cost, and equity outcomes  
+- Manuscript ready tables and figures  
+- Run manifests capturing execution metadata  
+- Output inventories enumerating generated files  
+- Execution logs for reproducibility and debugging  
+
+All artifacts are saved under the `outputs/` directory in both machine readable and publication ready formats.
+
+---
+
+## Analysis Pipeline Structure
+
+The analysis pipeline is modular and executed sequentially via a single entry point.
+
+```text
+analysis/R/
+├── 00_setup.R                     Central configuration, paths, seeds, logging
+├── 00_run_all.R                   End to end pipeline orchestrator
+├── 01_build_cohort.R              Cohort construction and eligibility filters
+├── 02_extract_features.R          Feature extraction and missingness diagnostics
+├── 03_train_models.R              Baseline model training and prediction
+├── 04_run_bandit_simulation.R     Governance simulation with delayed feedback
+└── 05_make_tables_figures.R       Manuscript ready outputs
+
+
+Running:
+
+source("analysis/R/00_run_all.R")
+executes the full pipeline end to end and regenerates all tables, figures, and logs.
+
+Repository Structure
+
+multiarm-bandit-clinical-ai-governance/
+├── analysis/
+│   └── R/                         End to end reproducible R pipeline
+├── docs/                          Governance rationale and conceptual documentation
+├── docker/                        Optional Docker environment
+├── config/                        Governance parameters, weights, and fixed seeds
+├── outputs/
+│   ├── data/                      Derived datasets (not committed)
+│   ├── models/                    Trained model objects (not committed)
+│   ├── tables/                    Manuscript ready tables (CSV)
+│   ├── figures/                   Manuscript ready figures (PNG, PDF)
+│   ├── logs/                      Execution logs
+│   └── cache_raw/                 Intermediate cached artifacts
+├── .gitignore
+├── LICENSE
+├── CITATION.cff
+└── README.md
+The `.gitignore` file excludes patient level data, trained models, and cached intermediates to prevent accidental disclosure.
+```
+---
+
+## Data Access and Requirements
+
+This repository does not contain clinical data.
+
+To reproduce the analyses, users must obtain independent, approved access to PhysioNet datasets such as MIMIC IV and comply with all applicable data use agreement requirements. Cohort construction, feature extraction, and governance simulation are performed locally after access approval and completion of required training.
+
+---
+
+## Reproducibility
+
+Reproducibility is implemented through:
+
+- Version locked R environments using `renv`
+- Project relative file paths for portability
+- Fully scripted cohort construction, governance simulation, and evaluation
+- Fixed random seeds for sampling, delayed feedback, and stochastic components
+- Persisted cohort identifiers enabling exact reruns
+
+Together these measures support transparent and auditable reproduction by qualified users.
+
+---
+
+## Containerization (Optional)
+
+For users who prefer a containerized environment, this project supports Docker based execution.
+
+Containerization is provided as an optional convenience to support environment consistency and ease of setup. It is not required to reproduce results, and all analyses can be run directly in a local R environment using the provided scripts and version locked dependencies.
+
+Docker containers encapsulate the R runtime and package dependencies only. Access to credentialed datasets such as MIMIC IV must still be configured locally and mounted in accordance with PhysioNet data use agreements.
+
+---
+
+## Intended Use and Limitations
+
+This software is intended for simulation based evaluation of deployment governance strategies, methodological research in adaptive and sequential decision systems, and audit and safety oriented clinical informatics research.
+
+This software is not intended for clinical deployment, real time decision support, or patient care. Any extension beyond retrospective simulation requires independent validation, formal governance review, and appropriate institutional oversight.
+
+---
+
+## Ethics and Compliance
+
+This project involves secondary analysis of fully deidentified electronic health record data accessed under approved PhysioNet credentialing. No new data collection was performed. The work is limited to retrospective simulation and does not involve patient intervention or prospective deployment.
+
+Users are responsible for complying with all dataset credentialing, training, and data use agreement requirements.
+
+---
+
+## Code Availability
+
+All code used for cohort construction, feature extraction, predictive model inference, governance policy implementation, delayed feedback simulation, and evaluation is publicly available at:
+
+**GitHub**  
+https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance  
+
+**Archived release (Zenodo DOI)**  
+https://doi.org/10.5281/zenodo.18248286  
+
+No patient level data are included. Reproduction requires independent credentialed access to MIMIC IV via PhysioNet.
+
+---
+
+## License
+
+This project is released under the terms specified in the LICENSE file.
+
+---
+
+## Citation
+
+If you use this repository in academic work, please cite both this repository and the MIMIC IV database. Citation metadata is provided in `CITATION.cff`.
+
+---
+
+## Author
+
+Julian Borges, MD, MS  
+MS Health Informatics ’27  
+Department of Computer Science  
+Boston University Metropolitan College  
+
+Clinician Scientist  
+Harvard Medical School GCSRT ’25  
+
+Email: jyborges@bu.edu
+
+---
+
+<div align="center">
+
+**Frontier Translational Research Lab**
+
+Department of Computer Science · Boston University · Harvard Medical School GCSRT Alumni
+
+[![Lab Website](https://img.shields.io/badge/Lab-frontier--lab-002244?style=flat-square)](https://julian-borges-md.github.io/frontier-lab/)
+[![BU CS](https://img.shields.io/badge/BU-Computer_Science-cc0000?style=flat-square)](https://www.bu.edu/cs/)
+[![HMS](https://img.shields.io/badge/HMS-GCSRT_Alumni-a51c30?style=flat-square)](https://ghsm.hms.harvard.edu/education/global-clinical-scholars-research-training)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0001--9929--3135-a6ce39?style=flat-square&logo=orcid&logoColor=white)](https://orcid.org/0009-0001-9929-3135)
+[![CV](https://img.shields.io/badge/Academic_CV-research--profile-4f46e5?style=flat-square)](https://julian-borges-md.github.io/research-profile/)
+
+*Julian Borges, MD, MS · jyborges@bu.edu*
+
+</div>

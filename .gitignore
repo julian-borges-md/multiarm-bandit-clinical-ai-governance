@@ -1,0 +1,21 @@
+# ---- Clinical data and derived artifacts ----
+outputs/data/
+outputs/models/
+outputs/cache_raw/
+
+# ---- Local machine specific configuration ----
+config/paths.yml
+
+
+# ---- Logs and temporary files ----
+*.log
+*.tmp
+
+# ---- R environment and session artifacts ----
+.Rhistory
+.RData
+.Rproj.user/
+
+# ---- OS specific ----
+.DS_Store
+Thumbs.db

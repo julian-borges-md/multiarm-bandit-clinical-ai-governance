@@ -1,0 +1,34 @@
+project:
+  name: "multiarm-bandit-clinical-ai-governance"
+  version: "0.1.0"
+
+reproducibility:
+  seed_global: 20250101
+  seed_sampling: 20250102
+  seed_delay: 20250103
+  seed_bandit: 20250104
+
+cohort:
+  eval_n: 3000
+  stratify_by: "mortality"
+
+features:
+  window_hours: 24
+  missingness_threshold: 0.60
+
+models:
+  arms:
+    - "glm"
+    - "ranger"
+    - "xgb"
+
+governance:
+  policy: "fixed_confidence_action_elimination"
+  delta: 0.05
+  reward:
+    lambda_cost: 0.10
+    lambda_safety: 0.50
+    safety_focus: "false_negative"
+  delay_hours:
+    min: 6
+    max: 72
