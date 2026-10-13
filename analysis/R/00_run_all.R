@@ -31,7 +31,7 @@ for (i in seq_along(steps)) {
 save_table(manifest, 0, "RunManifest")
 
 # environment capture
-pkgs <- c("data.table", "duckdb", "glmnet", "xgboost", "ranger", "pROC", "ggplot2", "yaml", "jsonlite", "digest")
+pkgs <- c("data.table", "R.utils", "duckdb", "glmnet", "xgboost", "ranger", "pROC", "ggplot2", "yaml", "jsonlite", "digest")
 pkg_versions <- sapply(pkgs, function(p) tryCatch(as.character(packageVersion(p)), error = function(e) NA_character_))
 mimic_sha <- NULL
 if (identical(cfg$data_mode, "mimic") && cfg_validate_mimic(mustWork = FALSE)) {

@@ -37,7 +37,7 @@ Requirements: R 4.5 or later and credentialed access to MIMIC-IV v3.1 (PhysioNet
 ```bash
 git clone https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance.git
 cd multiarm-bandit-clinical-ai-governance
-Rscript -e 'install.packages(c("data.table","yaml","jsonlite","digest","glmnet","xgboost","ranger","pROC","ggplot2","scales","testthat","DBI","duckdb"))'
+Rscript -e 'install.packages(c("data.table","R.utils","yaml","jsonlite","digest","glmnet","xgboost","ranger","pROC","ggplot2","scales","testthat","DBI","duckdb"))'
 cp config/paths_template.yml config/paths.yml      # set mimic_iv_dir to your local MIMIC-IV v3.1 root
 Rscript tests/run_tests.R                           # unit tests (no data needed)
 Rscript analysis/R/00_run_all.R                     # full run, about 10 minutes on a laptop

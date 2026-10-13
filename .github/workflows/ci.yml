@@ -16,7 +16,7 @@ jobs:
       - name: Install system libraries
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
       - name: Install R packages
-        run: Rscript -e 'install.packages(c("data.table","yaml","jsonlite","digest","glmnet","xgboost","ranger","pROC","ggplot2","scales","testthat","DBI","duckdb"))'
+        run: Rscript -e 'install.packages(c("data.table","R.utils","yaml","jsonlite","digest","glmnet","xgboost","ranger","pROC","ggplot2","scales","testthat","DBI","duckdb"))'
       - name: Unit tests
         run: Rscript tests/run_tests.R
       - name: Synthetic end to end run

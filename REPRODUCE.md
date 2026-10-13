@@ -5,7 +5,7 @@
 | Item | Requirement |
 |---|---|
 | R | 4.5.0 or later (the archived run used R 4.5.2, see `outputs/results/run_manifest.json`) |
-| Packages | data.table, yaml, jsonlite, digest, glmnet, xgboost, ranger, pROC, ggplot2, scales, testthat, DBI, duckdb (versions in the run manifest) |
+| Packages | data.table, R.utils (gz reading), yaml, jsonlite, digest, glmnet, xgboost, ranger, pROC, ggplot2, scales, testthat, DBI, duckdb (versions in the run manifest) |
 | Data | MIMIC-IV v3.1 csv.gz files from PhysioNet (credentialed access): hosp/patients, hosp/admissions, hosp/d_labitems, hosp/labevents, icu/icustays, icu/d_items, icu/chartevents |
 | Hardware | 8 GB RAM is enough; the archived run used 12 threads and about 10 minutes end to end |
 

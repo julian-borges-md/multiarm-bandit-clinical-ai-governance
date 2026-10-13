@@ -26,6 +26,9 @@ An audit on 2026-10-12 found that the version 1.0.0 pipeline (a) trained and eva
 ### Removed
 - `06_make_comparator_results` (hindsight comparators), `activate.R` at the repository root, the 0.1.0 version string
 
+### Note on the archived run
+The run manifest in `outputs/results/run_manifest.json` records commit a99b646, the analysis code of this release; the only later change before the tag adds the R.utils dependency to the installation instructions and CI.
+
 ### Provenance note
 The GitHub history before this release consists of a single commit dated 2026-05-19. The Zenodo 1.0.0 archive (md5 96e6d441a3d1b48a75113c7662ffa9f2) corresponds to the January 2026 working copy and cannot be mapped to a commit; from 2.0.0 onward every archived version is a tagged commit.
 
