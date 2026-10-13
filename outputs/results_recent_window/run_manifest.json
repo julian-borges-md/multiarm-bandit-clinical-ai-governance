@@ -1,15 +1,15 @@
 {
   "project": "multiarm-bandit-clinical-ai-governance",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "mode": "mimic",
-  "git_commit": "6c7a0f160db5965d9fefeb8b73da12e4a12fc42c",
+  "git_commit": "3f02ce510b9711cc1c3defe16a003cf58c101f62",
   "params_file": "config/params_recent_window.yml",
-  "params_sha256": "85dcd930b22a0aee238d1fc8a8b628dbe5cf7d904601fc4868083cf44d6afbf8",
+  "params_sha256": "b128b00eb13e542a4ccb61b9f20fe92cd4bd1fd90c9f29e5006e0f53817e2fbc",
   "r_version": "R version 4.5.2 (2025-10-31)",
   "platform": "aarch64-apple-darwin20",
   "hostname": "escapepod-3",
-  "run_started_utc": "2026-10-13T09:59:41Z",
-  "elapsed_min": 10.0687678337097,
+  "run_started_utc": "2026-10-13T14:29:05Z",
+  "elapsed_min": 7.56888525088628,
   "packages": {
     "data.table": "1.17.8",
     "R.utils": "2.13.0",
@@ -27,45 +27,45 @@
     {
       "step": 1,
       "script": "01_build_cohort.R",
-      "started": "2026-10-13T09:59:41Z",
-      "ended": "2026-10-13T09:59:43Z",
-      "elapsed_sec": 2.29677581787109,
+      "started": "2026-10-13T14:29:05Z",
+      "ended": "2026-10-13T14:29:07Z",
+      "elapsed_sec": 2.22192001342773,
       "status": "success",
       "error": ""
     },
     {
       "step": 2,
       "script": "02_extract_features.R",
-      "started": "2026-10-13T09:59:43Z",
-      "ended": "2026-10-13T10:01:12Z",
-      "elapsed_sec": 88.5401961803436,
+      "started": "2026-10-13T14:29:07Z",
+      "ended": "2026-10-13T14:30:35Z",
+      "elapsed_sec": 87.1464669704437,
       "status": "success",
       "error": ""
     },
     {
       "step": 3,
       "script": "03_train_models.R",
-      "started": "2026-10-13T10:01:12Z",
-      "ended": "2026-10-13T10:01:32Z",
-      "elapsed_sec": 19.4963791370392,
+      "started": "2026-10-13T14:30:35Z",
+      "ended": "2026-10-13T14:30:54Z",
+      "elapsed_sec": 18.9819779396057,
       "status": "success",
       "error": ""
     },
     {
       "step": 4,
       "script": "04_run_bandit_simulation.R",
-      "started": "2026-10-13T10:01:32Z",
-      "ended": "2026-10-13T10:08:30Z",
-      "elapsed_sec": 418.07967710495,
+      "started": "2026-10-13T14:30:54Z",
+      "ended": "2026-10-13T14:36:35Z",
+      "elapsed_sec": 341.84642791748,
       "status": "success",
       "error": ""
     },
     {
       "step": 5,
       "script": "05_make_tables_figures.R",
-      "started": "2026-10-13T10:08:30Z",
-      "ended": "2026-10-13T10:08:32Z",
-      "elapsed_sec": 2.02652382850647,
+      "started": "2026-10-13T14:36:35Z",
+      "ended": "2026-10-13T14:36:39Z",
+      "elapsed_sec": 3.50504994392395,
       "status": "success",
       "error": ""
     }
@@ -74,44 +74,44 @@
     {
       "file": "hosp/patients.csv.gz",
       "published_sha256": "4c7507de7ecad8c5ba7647ea4d26018e88ff6672c5fc22ab59c2a5697d687cdd",
-      "computed_sha256": "4c7507de7ecad8c5ba7647ea4d26018e88ff6672c5fc22ab59c2a5697d687cdd",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "hosp/admissions.csv.gz",
       "published_sha256": "a9584ed88e9ed664a2f66f86a5cf9fd175c8bb0af50e3b6115598b19e978384e",
-      "computed_sha256": "a9584ed88e9ed664a2f66f86a5cf9fd175c8bb0af50e3b6115598b19e978384e",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "icu/icustays.csv.gz",
       "published_sha256": "3c590ed37f1fb7a77a128f2f6961f836001512ba81adcd0dfeced2702f96bc5f",
-      "computed_sha256": "3c590ed37f1fb7a77a128f2f6961f836001512ba81adcd0dfeced2702f96bc5f",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "icu/d_items.csv.gz",
       "published_sha256": "7f223a9570da9c02bd12f281b398cb4951d5a560a51836540f357bc247366b7f",
-      "computed_sha256": "7f223a9570da9c02bd12f281b398cb4951d5a560a51836540f357bc247366b7f",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "hosp/d_labitems.csv.gz",
       "published_sha256": "b7afdda77b637a7afe4f2ddfcce19e6c6becad41da397e95631cc1d416de548f",
-      "computed_sha256": "b7afdda77b637a7afe4f2ddfcce19e6c6becad41da397e95631cc1d416de548f",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "icu/chartevents.csv.gz",
       "published_sha256": "fd0387653084e5b142756b98b74fdddc2e5e7eb0f496aa8bf5af3d4176e71098",
-      "computed_sha256": "fd0387653084e5b142756b98b74fdddc2e5e7eb0f496aa8bf5af3d4176e71098",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     },
     {
       "file": "hosp/labevents.csv.gz",
       "published_sha256": "2cd5e09b7e48c0189828854221f97e2e8568268eda82157c6933bf8e674d08d5",
-      "computed_sha256": "2cd5e09b7e48c0189828854221f97e2e8568268eda82157c6933bf8e674d08d5",
-      "verified": true
+      "computed_sha256": null,
+      "verified": null
     }
   ],
   "mimic_version": "3.1",
