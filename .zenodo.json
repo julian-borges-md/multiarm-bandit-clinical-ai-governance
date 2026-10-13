@@ -1,18 +1,52 @@
 {
-  "title": "Multi armed bandit governance for clinical AI deployment: adaptive model selection under delayed feedback (version 3.0.0)",
-  "description": "<p>Simulation framework for adaptive selection among frozen, independently validated ICU mortality prediction models under delayed outcome feedback, explicit cost and safety weights, and fixed confidence action elimination, evaluated on MIMIC-IV v3.1 with a temporally external deployment stream. Version 2.0.0 was a complete re analysis that supersedes version 1.0.0; version 3.0.0 revises the analysis after independent technical review (calendar ordering of development and deployment stays guaranteed by construction, arm C tuned by the common protocol, exact implied sample sizes, alert burden and cost vector sensitivity analyses, acquisition conditional costing, drift scenarios, a Gaussian posterior Thompson sampling variant, signed and patient experienced disparities, race subgroup sensitivities, a development window sensitivity analysis) and supersedes 2.x. The pipeline comprises: subject level and temporal development and deployment sets, DuckDB extraction with dictionary verified item identifiers, three frozen arms with Platt calibration and validation thresholds, a composite reward in [0, 1], fixed confidence action elimination with Hoeffding and empirical Bernstein anytime bounds, Thompson sampling, UCB1 and static, ensemble and heuristic comparators, a delayed feedback queue with a leakage assertion, 100 replicate simulation with paired bootstrap comparisons, sensitivity grids, an implied sample complexity table, a synthetic data mode, a unit test suite, continuous integration and a run manifest with MIMIC-IV file checksums. No patient level data are included; reproduction requires credentialed access to MIMIC-IV through PhysioNet.</p>",
+  "title": "Multi armed bandit governance for clinical AI deployment: adaptive model selection under delayed feedback (version 3.1.0)",
+  "description": "<p>Simulation framework for adaptive selection among frozen, independently validated ICU mortality prediction models under delayed outcome feedback, explicit cost and safety weights, and fixed confidence action elimination, evaluated on MIMIC-IV v3.1 with a temporally external deployment stream. Version 2.0.0 was a complete re analysis that supersedes version 1.0.0; version 3.0.0 revises the analysis after independent technical review (calendar ordering of development and deployment stays guaranteed by construction, arm C tuned by the common protocol, exact implied sample sizes, alert burden and cost vector sensitivity analyses, acquisition conditional costing, drift scenarios, a Gaussian posterior Thompson sampling variant, signed and patient experienced disparities, race subgroup sensitivities, a development window sensitivity analysis) and supersedes 2.x; version 3.1.0 adds six manuscript figures (evidence horizon, drift scenarios, gap composition, alert burden break even, subgroup sensitivity, extended horizon decision times) generated from the archived results of the same analysis, whose numbers are unchanged. The pipeline comprises: subject level and temporal development and deployment sets, DuckDB extraction with dictionary verified item identifiers, three frozen arms with Platt calibration and validation thresholds, a composite reward in [0, 1], fixed confidence action elimination with Hoeffding and empirical Bernstein anytime bounds, Thompson sampling, UCB1 and static, ensemble and heuristic comparators, a delayed feedback queue with a leakage assertion, 100 replicate simulation with paired bootstrap comparisons, sensitivity grids, an implied sample complexity table, a synthetic data mode, a unit test suite, continuous integration and a run manifest with MIMIC-IV file checksums. No patient level data are included; reproduction requires credentialed access to MIMIC-IV through PhysioNet.</p>",
   "upload_type": "software",
   "license": "Apache-2.0",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "creators": [
-    {"name": "Borges, Julian", "affiliation": "Department of Computer Science, Boston University Metropolitan College", "orcid": "0009-0001-9929-3135"}
+    {
+      "name": "Borges, Julian",
+      "affiliation": "Department of Computer Science, Boston University Metropolitan College",
+      "orcid": "0009-0001-9929-3135"
+    }
   ],
-  "keywords": ["clinical artificial intelligence", "AI governance", "multi armed bandits", "best arm identification", "delayed feedback", "deployment safety", "MIMIC-IV", "simulation study", "reproducibility"],
+  "keywords": [
+    "clinical artificial intelligence",
+    "AI governance",
+    "multi armed bandits",
+    "best arm identification",
+    "delayed feedback",
+    "deployment safety",
+    "MIMIC-IV",
+    "simulation study",
+    "reproducibility"
+  ],
   "related_identifiers": [
-    {"identifier": "10.21203/rs.3.rs-8651972/v1", "relation": "isSupplementTo", "resource_type": "publication-preprint", "scheme": "doi"},
-    {"identifier": "10.13026/kpb9-mt58", "relation": "cites", "resource_type": "dataset", "scheme": "doi"},
-    {"identifier": "10.5281/zenodo.18248286", "relation": "isNewVersionOf", "resource_type": "software", "scheme": "doi"},
-    {"identifier": "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance/tree/v3.0.0", "relation": "isIdenticalTo", "resource_type": "software", "scheme": "url"}
+    {
+      "identifier": "10.21203/rs.3.rs-8651972/v1",
+      "relation": "isSupplementTo",
+      "resource_type": "publication-preprint",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.13026/kpb9-mt58",
+      "relation": "cites",
+      "resource_type": "dataset",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.23338969",
+      "relation": "isNewVersionOf",
+      "resource_type": "software",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance/tree/v3.1.0",
+      "relation": "isIdenticalTo",
+      "resource_type": "software",
+      "scheme": "url"
+    }
   ],
-  "notes": "Version 1.0.0 (10.5281/zenodo.18248286) is superseded; its results must not be cited. See CHANGELOG.md."
+  "notes": "Version 3.1.0 adds figures only; every number equals version 3.0.0 (10.5281/zenodo.23338969). Version 1.0.0 (10.5281/zenodo.18248286) is superseded; its results must not be cited. See CHANGELOG.md."
 }

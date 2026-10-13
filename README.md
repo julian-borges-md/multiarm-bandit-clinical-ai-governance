@@ -7,7 +7,7 @@ Simulation framework for adaptive selection among frozen, independently validate
 [![Zenodo (all versions)](https://img.shields.io/badge/Zenodo-10.5281%2Fzenodo.18248285-blue)](https://doi.org/10.5281/zenodo.18248285)
 [![Data: MIMIC-IV v3.1](https://img.shields.io/badge/data-MIMIC--IV%20v3.1-orange.svg)](https://doi.org/10.13026/kpb9-mt58)
 
-Version 2.0.0 superseded the January 2026 release in every analytic respect; version 3.0.0 revises the analysis after independent technical review and supersedes 2.x. See [CHANGELOG.md](CHANGELOG.md) for the full record of what changed and why.
+Version 2.0.0 superseded the January 2026 release in every analytic respect; version 3.0.0 revises the analysis after independent technical review and supersedes 2.x; version 3.1.0 adds six figures and changes no number. See [CHANGELOG.md](CHANGELOG.md) for the full record of what changed and why.
 
 ## What the software does
 

@@ -19,6 +19,19 @@ The commit history was rewritten on 2026-10-13 to remove trailer lines from comm
 
 Tree identity can be checked with `git rev-parse <commit>^{tree}` on both sides of a pair; the pre rewrite history is retained offline by the author.
 
+## [3.1.0] - 2026-10-13
+
+Figures only. No analytic code, parameter or result changes; every number in `outputs/results` and `outputs/tables` is identical to 3.0.0, and the archived run was repeated at this release so that the run manifest names the release that produced the committed figures.
+
+### Added
+- Figure 8, the evidence horizon: outcomes per arm needed to retire each inferior arm at delta = 0.05 under both bounds with patient level bootstrap intervals, and under every sensitivity scenario, against the outcomes available per arm and the extended horizon (`05_make_tables_figures.R`)
+- Figure 9, drift scenarios: regret of static deployment of the validation choice against the adaptive policies under the four degradation scenarios and three delay settings
+- Figure 10, composition of the reward gaps into the utility, safety and cost terms
+- Figure 11, reward gap of each inferior arm as a function of the alert burden weight with the break even weights and the simulated grid points
+- Figure 12, per arm sensitivity by age group, sex and race group with Wilson intervals
+- Figure 13, empirical distribution of the decision index at which the empirical Bernstein policy retired arm C (primary) and arm A (severe degradation) on the extended horizon
+- Section 9 of `docs/analysis-specification.md` listing the source files of each figure
+
 ## [3.0.0] - 2026-10-13
 
 Revision after independent technical review of the version 2 manuscript. The analysis changes in ways that alter the printed numbers, so this release supersedes 2.x; the direction of every finding is unchanged.

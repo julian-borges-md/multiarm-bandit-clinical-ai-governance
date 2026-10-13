@@ -1,7 +1,7 @@
 # Governance simulation parameters (version controlled; no local paths here)
 project:
   name: "multiarm-bandit-clinical-ai-governance"
-  version: "3.0.0"
+  version: "3.1.0"
 
 data:
   # "mimic" reads MIMIC-IV v3.1 from config/paths.yml (MIMIC_IV_DIR); "synthetic" needs no data access

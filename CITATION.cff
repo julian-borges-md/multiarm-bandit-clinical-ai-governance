@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, cite it through the Zenodo concept DOI below, which resolves to the latest version."
 title: "Multi armed bandit governance for clinical AI deployment: adaptive model selection under delayed feedback"
 type: software
-version: "3.0.0"
+version: "3.1.0"
 date-released: "2026-10-13"
 license: Apache-2.0
 doi: 10.5281/zenodo.18248285
