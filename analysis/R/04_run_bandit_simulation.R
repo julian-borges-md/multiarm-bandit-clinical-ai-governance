@@ -5,7 +5,9 @@
 # Inputs:  data/stream_predictions.csv.gz, results/arms_meta.csv, results/stream_meta.json
 # Outputs (results/): replicate_metrics.csv, strategy_summary.csv, paired_differences.csv,
 #   regret_curves.csv, exploration_deciles.csv, fcae_trace_rep1.csv, elimination_summary.csv,
-#   sensitivity_lambda.csv, sensitivity_delta.csv, sensitivity_delay.csv, simulation_meta.json
+#   sensitivity_lambda.csv, sensitivity_delta.csv, sensitivity_delay.csv, sensitivity_utility.csv,
+#   implied_sample_complexity.csv, implied_sample_complexity_utility.csv, gap_bootstrap.csv,
+#   extended_horizon_replicates.csv, extended_horizon_summary.csv, simulation_meta.json
 
 if (!exists("cfg", inherits = TRUE)) source(file.path("analysis", "R", "00_setup.R"))
 suppressPackageStartupMessages({ library(data.table); library(jsonlite); library(parallel) })
@@ -49,7 +51,8 @@ for (k in seq_len(K)) policy_label[paste0("static_", arms$arm[k])] <- sprintf("S
 vp <- load_data("validation_predictions")
 P_val <- as.matrix(vp[, paste0("p_", arms$arm), with = FALSE]); y_val <- as.integer(vp$mort_hosp)
 # the static comparator is always chosen on validation data under the scenario's own weights
-validation_best_arm <- function(lambda_c, lambda_s) which.max(colMeans(reward_matrix(P_val, y_val, thr, cost, lambda_c, lambda_s)))
+utility_primary <- if (is.null(params$reward$utility)) "brier" else params$reward$utility
+validation_best_arm <- function(lambda_c, lambda_s, utility = utility_primary) which.max(colMeans(reward_matrix(P_val, y_val, thr, cost, lambda_c, lambda_s, utility)))
 stopifnot(validation_best_arm(params$reward$lambda_cost, params$reward$lambda_safety) == static_best)
 
 static_index <- function(policy, sb = static_best) {
@@ -61,15 +64,16 @@ static_index <- function(policy, sb = static_best) {
 # -----------------------------------------------------------------------------
 # One replicate for a set of policies under one scenario
 # -----------------------------------------------------------------------------
-run_replicate <- function(rep, policies, lambda_c, lambda_s, delta, delay_min, delay_max, keep_trace = FALSE, thin = 10) {
+run_replicate <- function(rep, policies, lambda_c, lambda_s, delta, delay_min, delay_max, keep_trace = FALSE, thin = 10,
+                          utility = utility_primary) {
   set.seed(params$reproducibility$seed_simulation + rep)
   ord <- sample.int(T)
   Pr <- P[ord, , drop = FALSE]; yr <- y[ord]; ctx_r <- ctx[ord]; st_r <- stratum_all[ord]
-  R <- reward_matrix(Pr, yr, thr, cost, lambda_c, lambda_s)
+  R <- reward_matrix(Pr, yr, thr, cost, lambda_c, lambda_s, utility)
   best_fixed <- which.max(colSums(R))
-  extra <- make_extra(Pr, yr, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = K)
+  extra <- make_extra(Pr, yr, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = K, utility = utility)
   sched <- make_schedule(T, arrival_rate, delay_min, delay_max)
-  sb <- validation_best_arm(lambda_c, lambda_s)
+  sb <- validation_best_arm(lambda_c, lambda_s, utility)
   rows <- list(); curves <- list(); deciles <- list(); trace <- list()
   for (pol in policies) {
     res <- run_policy(pol, R, Pr, yr, thr, cost, sched, delta = delta, stratum = st_r, extra = extra,
@@ -91,7 +95,7 @@ lc <- params$reward$lambda_cost; ls <- params$reward$lambda_safety; delta <- par
 dmin <- params$delay$min_hours; dmax <- params$delay$max_hours
 Rn <- params$simulation$replicates
 thin <- params$simulation$regret_curve_thin
-msg("Primary scenario: lambda_c=%.2f lambda_s=%.2f delta=%.2f delay=[%g,%g] h, %d replicates", lc, ls, delta, dmin, dmax, Rn)
+msg("Primary scenario: utility=%s lambda_c=%.2f lambda_s=%.2f delta=%.2f delay=[%g,%g] h, %d replicates", utility_primary, lc, ls, delta, dmin, dmax, Rn)
 
 msg("Using %d cores for replicates", n_cores)
 prim <- par_lapply(seq_len(Rn), function(r) run_replicate(r, policies_all, lc, ls, delta, dmin, dmax, keep_trace = (r == 1), thin = thin))
@@ -157,21 +161,44 @@ setnames(elim, paste0("elim_step_arm", seq_len(K)), paste0("arm_", arms$arm))
 surv <- metrics[policy == "fcae", .N, by = best_fixed_arm]
 
 # implied sample complexity from the observed gaps on the stream (full information)
-R0 <- reward_matrix(P, y, thr, cost, lc, ls)
-mu <- colMeans(R0); v <- apply(R0, 2, var); best0 <- which.max(mu)
-isc <- rbindlist(lapply(seq_len(K), function(a) {
-  gap <- mu[best0] - mu[a]
-  n_h <- implied_sample_size(gap, v[a], v[best0], K, delta, "hoeffding")
-  n_b <- implied_sample_size(gap, v[a], v[best0], K, delta, "bernstein")
-  data.table(arm = arms$arm[a], mean_reward = mu[a], sd_reward = sqrt(v[a]), gap_to_best = gap,
-             gap_in_sd_units = gap / sqrt(v[a]),
-             n_per_arm_hoeffding = n_h, n_per_arm_bernstein = n_b,
-             decisions_round_robin_hoeffding = K * n_h, decisions_round_robin_bernstein = K * n_b,
-             stream_length = T)
-}))
+implied_complexity_table <- function(R0, utility) {
+  mu <- colMeans(R0); v <- apply(R0, 2, var); best0 <- which.max(mu)
+  rbindlist(lapply(seq_len(K), function(a) {
+    gap <- mu[best0] - mu[a]
+    n_h <- implied_sample_size(gap, v[a], v[best0], K, delta, "hoeffding")
+    n_b <- implied_sample_size(gap, v[a], v[best0], K, delta, "bernstein")
+    data.table(utility = utility, arm = arms$arm[a], mean_reward = mu[a], sd_reward = sqrt(v[a]), gap_to_best = gap,
+               gap_in_sd_units = gap / sqrt(v[a]),
+               n_per_arm_hoeffding = n_h, n_per_arm_bernstein = n_b,
+               decisions_round_robin_hoeffding = K * n_h, decisions_round_robin_bernstein = K * n_b,
+               stream_length = T)
+  }))
+}
+R0 <- reward_matrix(P, y, thr, cost, lc, ls, utility_primary)
+isc <- implied_complexity_table(R0, utility_primary)
 save_result(isc, "implied_sample_complexity")
 save_result(elim, "elimination_summary")
 save_result(surv, "best_fixed_arm_by_replicate")
+
+# patient level bootstrap of the arm means, gaps and implied sample sizes (resampling stays
+# within the deployment stream; it quantifies sampling uncertainty of the gap estimates, not
+# generalisation to new hospitals)
+Bg <- params$simulation$gap_bootstrap_resamples
+msg("Gap bootstrap: %d patient level resamples of the stream", Bg)
+gb <- gap_bootstrap(R0, K, delta, B = Bg, seed = params$reproducibility$seed_simulation)
+best_share <- vapply(seq_len(K), function(a) mean(gb[, "best"] == a), numeric(1))
+q <- function(x, p) if (all(is.na(x))) NA_real_ else unname(quantile(x, p, na.rm = TRUE))
+gbs <- rbindlist(lapply(seq_len(K), function(a) {
+  nh <- gb[, paste0("n_hoeffding_", a)]; nb <- gb[, paste0("n_bernstein_", a)]
+  data.table(arm = arms$arm[a], resamples = Bg, share_best = best_share[a],
+             mean_reward_point = isc$mean_reward[a], mean_reward_lo = q(gb[, paste0("mu_", a)], 0.025), mean_reward_hi = q(gb[, paste0("mu_", a)], 0.975),
+             gap_point = isc$gap_to_best[a], gap_lo = q(gb[, paste0("gap_", a)], 0.025), gap_hi = q(gb[, paste0("gap_", a)], 0.975),
+             n_per_arm_hoeffding_point = isc$n_per_arm_hoeffding[a], n_per_arm_hoeffding_lo = q(nh, 0.025), n_per_arm_hoeffding_hi = q(nh, 0.975),
+             n_per_arm_bernstein_point = isc$n_per_arm_bernstein[a], n_per_arm_bernstein_lo = q(nb, 0.025), n_per_arm_bernstein_hi = q(nb, 0.975),
+             share_resamples_arm_not_best = mean(gb[, "best"] != a),
+             share_resamples_n_bernstein_within_stream = mean(!is.na(nb) & K * nb <= T))
+}))
+save_result(gbs, "gap_bootstrap")
 
 # -----------------------------------------------------------------------------
 # 2) Sensitivity analyses (fewer replicates)
@@ -216,6 +243,19 @@ for (sc in params$simulation$delay_scenarios) {
 }
 save_result(rbindlist(sens_y), "sensitivity_delay")
 
+msg("Sensitivity: utility functional")
+util_alts <- setdiff(unlist(params$simulation$utility_alternatives), utility_primary)
+sens_u <- list(); isc_u <- list(implied_complexity_table(R0, utility_primary))
+for (ug in util_alts) {
+  ml <- par_lapply(seq_len(Rs), function(r) { x <- run_replicate(r, sens_pols, lc, ls, delta, dmin, dmax, utility = ug)$metrics; x[, utility := ug]; x })
+  sens_u[[length(sens_u) + 1]] <- summarise_scenario(ml, "utility")
+  isc_u[[length(isc_u) + 1]] <- implied_complexity_table(reward_matrix(P, y, thr, cost, lc, ls, ug), ug)
+}
+mlp <- lapply(seq_len(Rs), function(r) { x <- metrics[rep == r & policy %in% sens_pols]; x[, utility := utility_primary]; x[, policy_label := NULL]; x })
+sens_u <- c(list(summarise_scenario(mlp, "utility")), sens_u)
+save_result(rbindlist(sens_u), "sensitivity_utility")
+save_result(rbindlist(isc_u), "implied_sample_complexity_utility")
+
 # -----------------------------------------------------------------------------
 # 3) Extended horizon: stream resampled with replacement to test whether elimination
 #    occurs at the sample sizes implied by the observed gaps (a planning check, not a result
@@ -228,9 +268,9 @@ run_extended <- function(rep) {
   set.seed(params$reproducibility$seed_simulation + 100000 + rep)
   idx <- sample.int(T, Te, replace = TRUE)
   Pr <- P[idx, , drop = FALSE]; yr <- y[idx]; ctx_r <- ctx[idx]; st_r <- stratum_all[idx]
-  R <- reward_matrix(Pr, yr, thr, cost, lc, ls)
+  R <- reward_matrix(Pr, yr, thr, cost, lc, ls, utility_primary)
   best_fixed <- which.max(colSums(R))
-  extra <- make_extra(Pr, yr, thr, cost, lc, ls, thr_ens, arm_low = 1L, arm_high = K)
+  extra <- make_extra(Pr, yr, thr, cost, lc, ls, thr_ens, arm_low = 1L, arm_high = K, utility = utility_primary)
   sched <- make_schedule(Te, arrival_rate, dmin, dmax)
   rbindlist(lapply(ext_pols, function(pol) {
     res <- run_policy(pol, R, Pr, yr, thr, cost, sched, delta = delta, stratum = st_r, extra = extra,
@@ -254,7 +294,8 @@ save_result(ext, "extended_horizon_replicates")
 save_result(ext_summary, "extended_horizon_summary")
 
 write_json_result(list(T = T, events = sum(y), K = K, arms = arms$arm, static_best_arm = arms$arm[static_best],
-                       replicates = Rn, sensitivity_replicates = Rs, lambda_cost = lc, lambda_safety = ls, delta = delta,
+                       replicates = Rn, sensitivity_replicates = Rs, utility = utility_primary, utility_alternatives = util_alts,
+                       gap_bootstrap_resamples = Bg, lambda_cost = lc, lambda_safety = ls, delta = delta,
                        delay_hours = c(dmin, dmax), arrival_rate_per_hour = arrival_rate,
                        elapsed_min = as.numeric(difftime(Sys.time(), t_start, units = "mins"))), "simulation_meta")
 msg("04_run_bandit_simulation.R done (%.1f min)", as.numeric(difftime(Sys.time(), t_start, units = "mins")))

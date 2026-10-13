@@ -7,7 +7,7 @@ Simulation framework for adaptive selection among frozen, independently validate
 [![Zenodo (all versions)](https://img.shields.io/badge/Zenodo-10.5281%2Fzenodo.18248285-blue)](https://doi.org/10.5281/zenodo.18248285)
 [![Data: MIMIC-IV v3.1](https://img.shields.io/badge/data-MIMIC--IV%20v3.1-orange.svg)](https://doi.org/10.13026/kpb9-mt58)
 
-Version 2.0.0 supersedes the January 2026 release in every analytic respect. See [CHANGELOG.md](CHANGELOG.md) for the full record of what changed and why.
+Version 2.0.0 superseded the January 2026 release in every analytic respect; version 2.1.0 adds a utility functional sensitivity analysis and a patient level bootstrap of the reward gaps. See [CHANGELOG.md](CHANGELOG.md) for the full record of what changed and why.
 
 ## What the software does
 
@@ -16,7 +16,7 @@ Version 2.0.0 supersedes the January 2026 release in every analytic respect. See
 | Cohort | `analysis/R/01_build_cohort.R` | Adult index ICU stays with a fully observed 24 hour window; subject level development set (anchor year groups 2008 to 2019) and a temporally external deployment stream (2020 to 2022) |
 | Features | `analysis/R/02_extract_features.R` | First 24 hour vital signs (8 concepts) and laboratory tests (13 concepts) extracted with DuckDB directly from the PhysioNet csv.gz files; item identifiers verified against the dictionaries at run time |
 | Arms | `analysis/R/03_train_models.R` | Three frozen models with distinct operational footprints: ridge logistic regression on demographics and vitals (cost 0.25), gradient boosted trees adding a core laboratory panel (cost 0.60), random forest adding extended laboratory tests (cost 1.00); Platt calibration and operating thresholds at 80 percent sensitivity set on a validation split never used for training |
-| Governance simulation | `analysis/R/04_run_bandit_simulation.R` | Policies: fixed confidence action elimination with Hoeffding and empirical Bernstein bounds, a stratified variant, Thompson sampling, UCB1, uniform random, static deployment, ensemble averaging and heuristic escalation; delayed feedback queue; 100 replicates; paired bootstrap comparisons; sensitivity grids over reward weights, confidence level and delay |
+| Governance simulation | `analysis/R/04_run_bandit_simulation.R` | Policies: fixed confidence action elimination with Hoeffding and empirical Bernstein bounds, a stratified variant, Thompson sampling, UCB1, uniform random, static deployment, ensemble averaging and heuristic escalation; delayed feedback queue; 100 replicates; paired bootstrap comparisons; sensitivity grids over reward weights, confidence level, delay and utility functional; patient level bootstrap of reward gaps and implied sample sizes |
 | Reporting | `analysis/R/05_make_tables_figures.R` | Every table and figure in the manuscript, generated only from `outputs/results` |
 
 The composite reward for arm a on patient t is
@@ -26,7 +26,7 @@ r_raw = (1 - (p - y)^2) - lambda_c * cost_a - lambda_s * 1[y = 1 and p < thresho
 r     = (r_raw + lambda_c + lambda_s) / (1 + lambda_c + lambda_s)        in [0, 1]
 ```
 
-where p is the calibrated mortality probability, y the in hospital mortality label, cost_a the normalised operational cost of the arm and threshold_a its operating threshold. The governance weights lambda_c and lambda_s are policy parameters set in `config/params.yml`, not tuned quantities.
+where p is the calibrated mortality probability, y the in hospital mortality label, cost_a the normalised operational cost of the arm and threshold_a its operating threshold. The governance weights lambda_c and lambda_s are policy parameters set in `config/params.yml`, not tuned quantities. The utility term 1 - (p - y)^2 can be replaced by binary correctness at the operating threshold (`reward.utility: accuracy`); the pipeline reports both.
 
 Fixed confidence action elimination keeps an active set of arms, cycles through it, updates each arm's estimate only when delayed feedback arrives, and removes an arm when its upper confidence bound falls below the highest lower confidence bound of another active arm. The confidence radii are valid simultaneously for every sample size and every arm, so the probability that the best arm is ever eliminated is at most delta. The formulas are documented in `analysis/R/lib/policies.R` and in `docs/analysis-specification.md`.
 

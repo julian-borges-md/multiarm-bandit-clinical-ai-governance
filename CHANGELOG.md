@@ -2,6 +2,19 @@
 
 All notable changes to this repository are recorded here. The format follows Keep a Changelog; versions follow semantic versioning.
 
+## [2.1.0] - 2026-10-13
+
+Pre review strengthening. Results of version 2.0.0 are unchanged; the primary analysis is identical.
+
+### Added
+- Utility functional sensitivity: `reward.utility` in `config/params.yml` selects one minus the Brier loss (primary) or binary correctness at the operating threshold; the primary scenario is repeated under the alternative utility (`outputs/results/sensitivity_utility.csv`, `implied_sample_complexity_utility.csv`, Table 16 and Table 18)
+- Patient level percentile bootstrap of the arm means, reward gaps and implied sample sizes on the deployment stream (`gap_bootstrap()` in `analysis/R/lib/policies.R`; `outputs/results/gap_bootstrap.csv`, Table 17)
+- Unit tests for the accuracy utility and for the bootstrap (determinism, dimensions, recovery of the full sample gaps)
+
+### Changed
+- `composite_reward()`, `reward_matrix()` and `make_extra()` take a `utility` argument (default `"brier"`); `04_run_bandit_simulation.R` passes it through every scenario and records it in `simulation_meta.json`
+- Static comparators are chosen on validation under each scenario's utility as well as its weights
+
 ## [2.0.0] - 2026-10-13
 
 Complete re analysis. Version 1.0.0 is superseded; its results must not be cited.

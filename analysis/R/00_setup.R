@@ -136,7 +136,7 @@ load_data <- function(name) {
   df <- as.data.frame(dt, stringsAsFactors = FALSE)
   for (j in seq_len(ncol(df))) {
     v <- df[[j]]
-    if (is.numeric(v)) v <- ifelse(is.na(v), "", formatC(v, digits = 4, format = "fg", flag = "#"))
+    if (is.numeric(v)) v <- ifelse(is.na(v), "", sub("\\.$", "", formatC(v, digits = 4, format = "fg", flag = "#")))
     df[[j]] <- as.character(v)
   }
   header <- paste0("| ", paste(names(df), collapse = " | "), " |")

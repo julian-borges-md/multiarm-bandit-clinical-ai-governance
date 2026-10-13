@@ -67,6 +67,27 @@ save_table(ext[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)
 save_table(isc[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)], 14, "implied_sample_complexity")
 
 # -----------------------------------------------------------------------------
+# Tables 16 and 17: utility functional sensitivity and patient level gap bootstrap
+# -----------------------------------------------------------------------------
+sens_u <- load_result("sensitivity_utility")
+isc_u <- load_result("implied_sample_complexity_utility")
+gbs <- load_result("gap_bootstrap")
+save_table(sens_u[, c(.(utility = utility, policy = policy, best_fixed_arm = best_fixed_arm, static_best_arm = static_best_arm,
+                        cum_regret_fixed = fmt_ci(cum_regret_fixed_mean, cum_regret_fixed_lo, cum_regret_fixed_hi, 1),
+                        mean_reward = round(mean_reward_mean, 4), mean_cost = round(mean_cost_mean, 3), fnr = round(fnr_mean, 3)),
+                      lapply(.SD, function(x) round(x, 2))), .SDcols = grep("^eliminated_share_arm_", names(sens_u), value = TRUE)],
+           16, "sensitivity_utility")
+save_table(isc_u[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)], 18, "implied_sample_complexity_utility")
+fmt_n <- function(m, lo, hi) { f <- function(x) formatC(round(x), format = "d", big.mark = ","); ifelse(is.na(m), "best arm", sprintf("%s (%s to %s)", f(m), f(lo), f(hi))) }
+save_table(gbs[, .(arm, resamples, share_best = round(share_best, 3),
+                   mean_reward = fmt_ci(mean_reward_point, mean_reward_lo, mean_reward_hi, 4),
+                   gap_to_best = ifelse(gap_point <= 0, "best arm", fmt_ci(gap_point, gap_lo, gap_hi, 4)),
+                   n_per_arm_hoeffding = fmt_n(n_per_arm_hoeffding_point, n_per_arm_hoeffding_lo, n_per_arm_hoeffding_hi),
+                   n_per_arm_bernstein = fmt_n(n_per_arm_bernstein_point, n_per_arm_bernstein_lo, n_per_arm_bernstein_hi),
+                   share_resamples_n_bernstein_within_stream = round(share_resamples_n_bernstein_within_stream, 3))],
+           17, "gap_bootstrap")
+
+# -----------------------------------------------------------------------------
 # Tables 9 to 11: sensitivity analyses
 # -----------------------------------------------------------------------------
 sl <- dcast(sens_l[policy %in% c("fcae", "fcae_eb", "fcae_strat", "thompson", "static_best", "random", "ensemble", "heuristic")],

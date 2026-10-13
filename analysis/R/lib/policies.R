@@ -12,16 +12,18 @@
 # -----------------------------------------------------------------------------
 # Reward
 # -----------------------------------------------------------------------------
-composite_reward <- function(p, y, thr, cost, lambda_c, lambda_s) {
+# utility: "brier" (one minus Brier loss, primary) or "accuracy" (binary correctness at the operating threshold)
+composite_reward <- function(p, y, thr, cost, lambda_c, lambda_s, utility = "brier") {
   fn <- as.numeric(y == 1 & p < thr)
-  r_raw <- (1 - (p - y)^2) - lambda_c * cost - lambda_s * fn
+  u <- if (identical(utility, "accuracy")) as.numeric((p >= thr) == (y == 1)) else 1 - (p - y)^2
+  r_raw <- u - lambda_c * cost - lambda_s * fn
   (r_raw + lambda_c + lambda_s) / (1 + lambda_c + lambda_s)
 }
 
-reward_matrix <- function(P, y, thr, cost, lambda_c, lambda_s) {
+reward_matrix <- function(P, y, thr, cost, lambda_c, lambda_s, utility = "brier") {
   K <- ncol(P)
   R <- matrix(NA_real_, nrow = nrow(P), ncol = K, dimnames = dimnames(P))
-  for (a in seq_len(K)) R[, a] <- composite_reward(P[, a], y, thr[a], cost[a], lambda_c, lambda_s)
+  for (a in seq_len(K)) R[, a] <- composite_reward(P[, a], y, thr[a], cost[a], lambda_c, lambda_s, utility)
   R
 }
 
@@ -211,15 +213,15 @@ run_policy <- function(policy, R, P, y, thr, cost, schedule, delta = 0.05,
 # -----------------------------------------------------------------------------
 # Composite (non learning) strategies: ensemble average and heuristic escalation
 # -----------------------------------------------------------------------------
-make_extra <- function(P, y, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = ncol(P)) {
+make_extra <- function(P, y, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = ncol(P), utility = "brier") {
   p_ens <- rowMeans(P)
   cost_ens <- max(cost)
-  r_ens <- composite_reward(p_ens, y, thr_ens, cost_ens, lambda_c, lambda_s)
+  r_ens <- composite_reward(p_ens, y, thr_ens, cost_ens, lambda_c, lambda_s, utility)
   escalate <- P[, arm_low] >= thr[arm_low]
   p_heur <- ifelse(escalate, P[, arm_high], P[, arm_low])
   thr_heur <- ifelse(escalate, thr[arm_high], thr[arm_low])
   cost_heur <- ifelse(escalate, cost[arm_low] + cost[arm_high], cost[arm_low])
-  r_heur <- composite_reward(p_heur, y, thr_heur, cost_heur, lambda_c, lambda_s)
+  r_heur <- composite_reward(p_heur, y, thr_heur, cost_heur, lambda_c, lambda_s, utility)
   list(p_ens = p_ens, thr_ens = thr_ens, cost_ens = cost_ens, r_ens = r_ens,
        p_heur = p_heur, thr_heur = thr_heur, cost_heur = cost_heur, r_heur = r_heur, escalate = escalate)
 }
@@ -286,4 +288,24 @@ implied_sample_size <- function(gap, var_arm, var_best, K, delta, method, n_max 
     n <- ceiling(n * 1.05) + 1
   }
   Inf
+}
+
+# -----------------------------------------------------------------------------
+# Patient level bootstrap of the arm means, gaps and implied sample sizes on the stream
+# -----------------------------------------------------------------------------
+gap_bootstrap <- function(R, K, delta, B = 1000, seed = 1) {
+  set.seed(seed)
+  T <- nrow(R)
+  out <- matrix(NA_real_, B, 1 + 4 * K)
+  for (b in seq_len(B)) {
+    idx <- sample.int(T, T, replace = TRUE)
+    Rb <- R[idx, , drop = FALSE]
+    mu <- colMeans(Rb); v <- apply(Rb, 2, stats::var); best <- which.max(mu)
+    gaps <- mu[best] - mu
+    nh <- vapply(seq_len(K), function(a) implied_sample_size(gaps[a], v[a], v[best], K, delta, "hoeffding"), numeric(1))
+    nb <- vapply(seq_len(K), function(a) implied_sample_size(gaps[a], v[a], v[best], K, delta, "bernstein"), numeric(1))
+    out[b, ] <- c(best, mu, gaps, nh, nb)
+  }
+  colnames(out) <- c("best", paste0("mu_", seq_len(K)), paste0("gap_", seq_len(K)), paste0("n_hoeffding_", seq_len(K)), paste0("n_bernstein_", seq_len(K)))
+  out
 }

@@ -24,3 +24,21 @@ test_that("reward matrix matches the scalar definition", {
   expect_equal(R[1, 1], composite_reward(0.2, 1, 0.3, 0.25, 0.1, 0.5))
   expect_equal(R[2, 2], composite_reward(0.1, 0, 0.3, 1, 0.1, 0.5))
 })
+
+test_that("accuracy utility equals binary correctness at the operating threshold and stays in [0, 1]", {
+  r_tp <- composite_reward(p = 0.9, y = 1, thr = 0.3, cost = 0, lambda_c = 0, lambda_s = 0.5, utility = "accuracy")
+  r_fn <- composite_reward(p = 0.1, y = 1, thr = 0.3, cost = 0, lambda_c = 0, lambda_s = 0.5, utility = "accuracy")
+  r_tn <- composite_reward(p = 0.1, y = 0, thr = 0.3, cost = 0, lambda_c = 0, lambda_s = 0.5, utility = "accuracy")
+  r_fp <- composite_reward(p = 0.9, y = 0, thr = 0.3, cost = 0, lambda_c = 0, lambda_s = 0.5, utility = "accuracy")
+  expect_equal(r_tp, 1)
+  expect_equal(r_tn, 1)
+  expect_equal(r_fp, 0.5 / 1.5)
+  expect_equal(r_fn, 0)
+  set.seed(2)
+  p <- runif(5000); y <- rbinom(5000, 1, 0.3)
+  r <- composite_reward(p, y, thr = 0.3, cost = 1, 0.2, 1, utility = "accuracy")
+  expect_true(all(r >= 0 & r <= 1))
+  expect_lte(length(unique(r)), 3)   # correct, false positive and false negative are the only outcomes at one cost
+  R <- reward_matrix(matrix(p[1:10], 5, 2), y[1:5], thr = c(0.3, 0.3), cost = c(0.25, 1), 0.1, 0.5, utility = "accuracy")
+  expect_equal(R[1, 2], composite_reward(p[6], y[1], 0.3, 1, 0.1, 0.5, utility = "accuracy"))
+})

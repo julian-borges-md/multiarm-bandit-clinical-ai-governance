@@ -76,3 +76,20 @@ test_that("static policies always deploy the requested arm and regret against th
   expect_gte(m$scalar[["cum_regret_fixed"]], 0)
   expect_gte(m$scalar[["cum_regret_oracle"]], m$scalar[["cum_regret_fixed"]])
 })
+
+test_that("gap bootstrap reproduces the full sample gaps on average and is deterministic for a seed", {
+  set.seed(5)
+  T <- 4000; K <- 3
+  R <- cbind(pmin(pmax(rnorm(T, 0.80, 0.15), 0), 1), pmin(pmax(rnorm(T, 0.75, 0.15), 0), 1), pmin(pmax(rnorm(T, 0.65, 0.15), 0), 1))
+  gb1 <- gap_bootstrap(R, K, delta = 0.05, B = 200, seed = 3)
+  gb2 <- gap_bootstrap(R, K, delta = 0.05, B = 200, seed = 3)
+  expect_identical(gb1, gb2)
+  expect_equal(dim(gb1), c(200, 1 + 4 * K))
+  mu <- colMeans(R); gaps <- mu[which.max(mu)] - mu
+  expect_equal(unname(colMeans(gb1[, paste0("gap_", 1:K)])), unname(gaps), tolerance = 0.01)
+  expect_true(mean(gb1[, "best"] == 1) > 0.9)
+  n3 <- gb1[, "n_bernstein_3"]
+  expect_true(all(is.finite(n3)))
+  expect_true(all(gb1[, "n_hoeffding_3"] >= n3 | is.na(gb1[, "n_hoeffding_3"])))
+  expect_true(all(is.na(gb1[gb1[, "best"] == 1, "n_bernstein_1"])))
+})
