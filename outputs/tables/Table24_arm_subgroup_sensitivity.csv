@@ -1,0 +1,28 @@
+model,variable,level,deaths,detected,sensitivity,sensitivity_lo,sensitivity_hi
+A,age_group,65 and over,622,535,0.860129,0.830654,0.885182
+A,age_group,under 65,360,288,0.8,0.75561,0.838055
+A,race_group,Asian,26,22,0.846154,0.664688,0.9385
+A,race_group,Black,66,57,0.863636,0.760704,0.926567
+A,race_group,Hispanic or Latino,34,25,0.735294,0.568829,0.853988
+A,race_group,Other or unknown,410,364,0.887805,0.853586,0.914825
+A,race_group,White,446,355,0.795964,0.75611,0.830763
+A,sex_group,female,399,336,0.842105,0.803086,0.8746
+A,sex_group,male,583,487,0.835334,0.803052,0.863226
+B,age_group,65 and over,622,539,0.866559,0.837573,0.891046
+B,age_group,under 65,360,301,0.836111,0.794361,0.870764
+B,race_group,Asian,26,24,0.923077,0.758584,0.978645
+B,race_group,Black,66,55,0.833333,0.725694,0.904304
+B,race_group,Hispanic or Latino,34,28,0.823529,0.664863,0.91651
+B,race_group,Other or unknown,410,361,0.880488,0.845504,0.908408
+B,race_group,White,446,372,0.834081,0.796732,0.865723
+B,sex_group,female,399,341,0.854637,0.81667,0.88584
+B,sex_group,male,583,499,0.855918,0.82508,0.882096
+C,age_group,65 and over,622,526,0.845659,0.815154,0.871921
+C,age_group,under 65,360,322,0.894444,0.858434,0.922126
+C,race_group,Asian,26,25,0.961538,0.811072,0.993178
+C,race_group,Black,66,57,0.863636,0.760704,0.926567
+C,race_group,Hispanic or Latino,34,27,0.794118,0.632016,0.896505
+C,race_group,Other or unknown,410,366,0.892683,0.858995,0.91908
+C,race_group,White,446,373,0.836323,0.79914,0.867761
+C,sex_group,female,399,345,0.864662,0.827599,0.89477
+C,sex_group,male,583,503,0.862779,0.832464,0.888344

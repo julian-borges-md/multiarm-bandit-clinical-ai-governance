@@ -1,0 +1,4 @@
+scenario,utility,arm,best_arm,mean_reward,sd_reward,gap_to_best,gap_in_sd_units,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_hoeffding,decisions_round_robin_bernstein,stream_length,outcomes_available_per_arm,shortfall_factor_hoeffding,shortfall_factor_bernstein,required_delta_hoeffding,required_delta_bernstein
+primary,brier,A,A,0.91924952304604,0.171275014984571,0,0,,,,,7383,2461,,,,
+primary,brier,B,A,0.902782834622141,0.161782460463872,0.0164666884238993,0.10178290265017,222029,36952,666087,110856,7383,2461,90.2190166598944,15.0150345388054,52059633.9734847,45346391.0869111
+primary,brier,C,A,0.880905078783499,0.146674389582095,0.0383444442625408,0.261425627008176,35997,8405,107991,25215,7383,2461,14.6269809020723,3.41527834213734,11903618.9254236,196015.844044643

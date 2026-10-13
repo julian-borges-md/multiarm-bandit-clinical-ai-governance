@@ -1,4 +1,4 @@
-utility,arm,mean_reward,sd_reward,gap_to_best,gap_in_sd_units,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_hoeffding,decisions_round_robin_bernstein,stream_length
-brier,A,0.922041280102092,0.162965148011111,0,0,,,,,7383
-brier,B,0.90682999470043,0.150526570858866,0.0152112854016624,0.101053822689713,264629,39442,793887,118326,7383
-brier,C,0.881960226918956,0.146332531540474,0.040081053183136,0.27390391433261,34067,7859,102201,23577,7383
+scenario,utility,arm,best_arm,mean_reward,sd_reward,gap_to_best,gap_in_sd_units,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_hoeffding,decisions_round_robin_bernstein,stream_length,outcomes_available_per_arm,shortfall_factor_hoeffding,shortfall_factor_bernstein,required_delta_hoeffding,required_delta_bernstein
+primary,brier,A,A,0.922765256606867,0.160219333610792,0,0,,,,,7383,2461,,,,
+primary,brier,B,A,0.907916093683375,0.144252918038771,0.0148491629234918,0.102938388528825,277052,39194,831156,117582,7383,2461,112.577001219017,15.9260463226331,55407770.5839873,50059940.2673895
+primary,brier,C,A,0.883147752056975,0.138663907504009,0.0396175045498917,0.28570884279131,33541,7508,100623,22524,7383,2461,13.6290125965055,3.05079236082893,10535126.1247284,88187.5600303983

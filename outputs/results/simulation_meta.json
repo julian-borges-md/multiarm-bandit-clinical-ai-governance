@@ -1,6 +1,6 @@
 {
   "T": 7383,
-  "events": 983,
+  "events": 982,
   "K": 3,
   "arms": ["A", "B", "C"],
   "static_best_arm": "A",
@@ -8,11 +8,18 @@
   "sensitivity_replicates": 30,
   "utility": "brier",
   "utility_alternatives": "accuracy",
+  "lambda_false_positive": 0,
   "gap_bootstrap_resamples": 1000,
+  "outcomes_available_per_arm": 2461,
   "lambda_cost": 0.1,
   "lambda_safety": 0.5,
   "delta": 0.05,
   "delay_hours": [6, 72],
   "arrival_rate_per_hour": 0.520974979085862,
-  "elapsed_min": 2.41833255290985
+  "arrival_rate_database": 0.520974979085862,
+  "arrival_rate_stream_own": 0.280743782797171,
+  "arrival_rate_recent_guaranteed": 0.41470834283976,
+  "arm_abs_gap_age": [0.060128617363344, 0.0304483744194355, 0.0487852804573062],
+  "arm_abs_gap_sex": [0.00677078631398387, 0.00128107575972525, 0.0018829234320793],
+  "elapsed_min": 5.03802178303401
 }

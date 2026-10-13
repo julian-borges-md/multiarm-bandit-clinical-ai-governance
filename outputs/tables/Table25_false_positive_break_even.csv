@@ -1,0 +1,4 @@
+arm,false_positive_rate,raw_gap_to_best,false_positive_rate_best,break_even_lambda_f
+A,0.249492,0,0.249492,
+B,0.198835,0.0237587,0.249492,0.469011
+C,0.202899,0.063388,0.249492,1.36045

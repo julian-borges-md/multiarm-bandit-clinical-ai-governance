@@ -1,0 +1,28 @@
+source,concept,itemid,label
+icu.chartevents,heart_rate,220045,Heart Rate
+icu.chartevents,sbp,220050,Arterial Blood Pressure systolic
+icu.chartevents,dbp,220051,Arterial Blood Pressure diastolic
+icu.chartevents,map,220052,Arterial Blood Pressure mean
+icu.chartevents,sbp,220179,Non Invasive Blood Pressure systolic
+icu.chartevents,dbp,220180,Non Invasive Blood Pressure diastolic
+icu.chartevents,map,220181,Non Invasive Blood Pressure mean
+icu.chartevents,resp_rate,220210,Respiratory Rate
+icu.chartevents,spo2,220277,O2 saturation pulseoxymetry
+icu.chartevents,gcs_eye,220739,GCS - Eye Opening
+icu.chartevents,temperature,223761,Temperature Fahrenheit
+icu.chartevents,temperature,223762,Temperature Celsius
+icu.chartevents,gcs_verbal,223900,GCS - Verbal Response
+icu.chartevents,gcs_motor,223901,GCS - Motor Response
+hosp.labevents,lactate,50813,Lactate
+hosp.labevents,bicarbonate,50882,Bicarbonate
+hosp.labevents,bilirubin_total,50885,"Bilirubin, Total"
+hosp.labevents,chloride,50902,Chloride
+hosp.labevents,creatinine,50912,Creatinine
+hosp.labevents,glucose,50931,Glucose
+hosp.labevents,potassium,50971,Potassium
+hosp.labevents,sodium,50983,Sodium
+hosp.labevents,bun,51006,Urea Nitrogen
+hosp.labevents,hemoglobin,51222,Hemoglobin
+hosp.labevents,inr,51237,INR(PT)
+hosp.labevents,platelets,51265,Platelet Count
+hosp.labevents,wbc,51301,White Blood Cells

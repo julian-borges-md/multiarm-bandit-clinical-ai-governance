@@ -1,0 +1,5 @@
+drift_scenario,arm,logit_noise_sd,decisions_affected,auroc_before,auroc_after,brier_before,brier_after,sensitivity_before,sensitivity_after,best_arm_after,gap_drifted_arm_after,sd_reward_drifted_arm,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_bernstein,outcomes_available_per_arm
+arm_A_moderate_from_start,A,1.5,7383,0.855002,0.752208,0.0878076,0.11478,0.838086,0.750509,B,0.00564901,0.188239,2172490,271060,813180,2461
+arm_A_moderate_from_third,A,1.5,4923,0.857817,0.762116,0.0858927,0.112866,0.839753,0.765794,B,0.00339595,0.184814,6385390,735132,2205400,1641
+arm_A_severe_from_start,A,4,7383,0.855002,0.62552,0.0878076,0.232797,0.838086,0.626273,B,0.0845733,0.261065,6437,3060,9180,2461
+arm_A_severe_from_third,A,4,4923,0.857817,0.638059,0.0858927,0.228492,0.839753,0.650231,B,0.0804228,0.256465,7187,3292,9876,1641

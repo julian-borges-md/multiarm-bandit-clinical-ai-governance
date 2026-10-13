@@ -1,4 +1,4 @@
-utility,arm,mean_reward,sd_reward,gap_to_best,gap_in_sd_units,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_hoeffding,decisions_round_robin_bernstein,stream_length
-brier,A,0.922,0.163,0,0,,,,,7383
-brier,B,0.9068,0.1505,0.01521,0.1011,264600,39440,793900,118300,7383
-brier,C,0.882,0.1463,0.04008,0.2739,34070,7859,102200,23580,7383
+scenario,utility,arm,best_arm,mean_reward,sd_reward,gap_to_best,gap_in_sd_units,n_per_arm_hoeffding,n_per_arm_bernstein,decisions_round_robin_hoeffding,decisions_round_robin_bernstein,stream_length,outcomes_available_per_arm,shortfall_factor_hoeffding,shortfall_factor_bernstein,required_delta_hoeffding,required_delta_bernstein
+primary,brier,A,A,0.922765,0.160219,0,0,,,,,7383,2461,,,,
+primary,brier,B,A,0.907916,0.144253,0.0148492,0.102938,277052,39194,831156,117582,7383,2461,112.577,15.926,55407800,50059900
+primary,brier,C,A,0.883148,0.138664,0.0396175,0.285709,33541,7508,100623,22524,7383,2461,13.629,3.05079,10535100,88187.6

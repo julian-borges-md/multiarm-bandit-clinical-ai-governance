@@ -1,5 +1,5 @@
 arm,label,learner,feature_set,cost,platt_intercept,platt_slope,detail,n_features,threshold,val_mean_reward,static_best
-A,"Ridge logistic regression, demographics and vitals",glmnet_ridge,vitals,0.25,0.172928488148524,1.10913773789951,ridge lambda.min=0.01201,34,0.0949712276439037,0.928631806253912,TRUE
-B,"Gradient boosted trees, demographics, vitals and core laboratory panel",xgboost,core_labs,0.6,0.0980987429118272,1.06915948290996,xgboost nrounds=252 (early stopping on validation half),84,0.137251284570863,0.913734424268744,FALSE
-C,"Random forest, all features including extended laboratory tests",ranger,all,1,0.26798962631658,1.32313734677783,ranger num.trees=500 mtry=9,99,0.143192418435598,0.888111789404737,FALSE
-ensemble,Equal weight average of the three arms,average,all,1,,,,,0.139435775146853,0.888256740885557,FALSE
+A,"Ridge logistic regression, demographics and vitals",glmnet_ridge,vitals,0.25,0.0296426518637805,1.02977616019481,ridge lambda.min=0.01214,34,0.0861380147581724,0.926500470957751,TRUE
+B,"Gradient boosted trees, demographics, vitals and core laboratory panel",xgboost,core_labs,0.6,-0.0911473369605197,0.901441451541269,xgboost nrounds=390 (early stopping on validation half),84,0.116723595819589,0.909745815045206,FALSE
+C,"Random forest, all features including extended laboratory tests",ranger,all,1,0.100103628362476,1.14742376660641,ranger num.trees=500 mtry=9 min.node.size=5 (selected on validation half from 9 settings),99,0.132554232909895,0.884290046585482,FALSE
+ensemble,Equal weight average of the three arms,average,all,1,,,,,0.132223211060149,0.884862076712599,FALSE

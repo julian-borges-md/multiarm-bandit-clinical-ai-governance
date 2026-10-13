@@ -1,0 +1,18 @@
+{
+  "mode": "mimic",
+  "arrival_rate_per_hour": 0.520974979085862,
+  "arrival_rate_database": 0.520974979085862,
+  "arrival_rate_stream_own": 0.280743782797171,
+  "arrival_rate_recent_guaranteed": 0.41470834283976,
+  "n_eligible_recent_guaranteed": 10906,
+  "n_eligible": 68503,
+  "n_development_pool_all": 11873,
+  "n_development_pool_retained": 9526,
+  "development_stay_rule": "guaranteed_before_deployment",
+  "deployment_start_year": 2020,
+  "n_train": 6665,
+  "n_val": 2222,
+  "n_stream": 7383,
+  "development_year_groups": "2017 - 2019",
+  "deployment_year_groups": "2020 - 2022"
+}

@@ -1,0 +1,5 @@
+arm,label,learner,feature_set,cost,platt_intercept,platt_slope,detail,n_features,threshold,val_mean_reward,static_best
+A,"Ridge logistic regression, demographics and vitals",glmnet_ridge,vitals,0.25,0.416851866622271,1.1547372695663,ridge lambda.min=0.01262,34,0.111015041897098,0.929716457394487,TRUE
+B,"Gradient boosted trees, demographics, vitals and core laboratory panel",xgboost,core_labs,0.6,0.352242442191932,1.1658051334738,xgboost nrounds=111 (early stopping on validation half),84,0.147131697813325,0.914610031340773,FALSE
+C,"Random forest, all features including extended laboratory tests",ranger,all,1,0.186170783736935,1.15147600266864,ranger num.trees=500 mtry=9 min.node.size=10 (selected on validation half from 9 settings),99,0.153992139946237,0.888681466470542,FALSE
+ensemble,Equal weight average of the three arms,average,all,1,,,,,0.184665946492069,0.889502551167934,FALSE

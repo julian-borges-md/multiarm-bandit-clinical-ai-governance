@@ -9,5 +9,8 @@
 | ICU length of stay 24 h to 60 d (feature window fully observed) | 74765 | 19598 |
 | Index ICU stay per hospital admission | 68503 | 6262 |
 | Anchor year group available | 68503 | 0 |
+| Development pool (patients anchored 2008 to 2019) | 60496 |  |
+| Development pool: stays whose real calendar window ends before 2020 | 52816 | 7680 |
 | Development set sampled (train plus validation) | 20000 |  |
+| Deployment pool (patients anchored 2020 to 2022) | 8007 |  |
 | Deployment stream sampled | 7383 |  |
