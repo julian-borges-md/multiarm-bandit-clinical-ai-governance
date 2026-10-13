@@ -30,7 +30,7 @@ Individual steps can be re run in order with `Rscript -e 'source("analysis/R/00_
 | Check | Where |
 |---|---|
 | Step status and timings | `outputs/tables/Table00_RunManifest.csv` |
-| Environment, commit, parameter hash, MIMIC file hashes | `outputs/results/run_manifest.json` (`VERIFY_MIMIC_SHA=1` recomputes the SHA256 of each MIMIC file and compares with PhysioNet's SHA256SUMS.txt). The `git_commit` field holds the pre rewrite identifier of the analysis tree; the public commit of the same tree is given in the history note at the top of `CHANGELOG.md` (3.0.0: `6c7a0f16` corresponds to `a7742eee`) |
+| Environment, commit, parameter hash, MIMIC file hashes | `outputs/results/run_manifest.json` (`VERIFY_MIMIC_SHA=1` recomputes the SHA256 of each MIMIC file and compares with PhysioNet's SHA256SUMS.txt). The `git_commit` field holds the identifier of the analysis tree. For the archives up to 3.0.0 it is the pre rewrite identifier, and the public commit of the same tree is given in the history note at the top of `CHANGELOG.md` (3.0.0: `6c7a0f16` corresponds to `a7742eee`); from 3.1.0 the runs post date the rewrite and the field holds the public commit itself (3.1.0: `3f02ce51`) |
 | Numbers in the manuscript | `outputs/tables/Table01` to `Table28` (28 tables, each as csv and md); every reported quantity is read from these files or from `outputs/results` |
 | Delayed feedback integrity | `leak_violations` column of `outputs/results/replicate_metrics.csv` must be 0 for every row (the simulator asserts it) |
 

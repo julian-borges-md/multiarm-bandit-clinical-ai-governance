@@ -4,7 +4,7 @@ All notable changes to this repository are recorded here. The format follows Kee
 
 ## Repository history note (2026-10-13)
 
-The commit history was rewritten on 2026-10-13 to remove trailer lines from commit messages. No file changed: every rewritten commit carries the same tree, author, dates and tag message as before, and the Zenodo archives are unaffected. Commit identifiers changed, so the `git_commit` field of the archived run manifests records the pre rewrite identifier of the tree that produced the outputs. The correspondence is:
+The commit history was rewritten on 2026-10-13 to remove trailer lines from commit messages. No file changed: every rewritten commit carries the same tree, author, dates and tag message as before, and the Zenodo archives are unaffected. Commit identifiers changed, so the `git_commit` field of the run manifests archived with 2.0.0 to 3.0.0 records the pre rewrite identifier of the tree that produced the outputs; manifests produced after the rewrite (3.1.0 onwards) record the public identifier directly (3.1.0: `3f02ce51`). The correspondence for the earlier archives is:
 
 | Run manifest identifier | Public commit (same tree) | Role |
 |---|---|---|
