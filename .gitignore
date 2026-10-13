@@ -3,6 +3,8 @@ outputs/data/
 outputs/models/
 outputs/cache_raw/
 outputs/logs/
+# any alternative output root (for example the development window run written to outputs_recent_window/)
+outputs_*/
 *.rds
 *.RData
 .RData
