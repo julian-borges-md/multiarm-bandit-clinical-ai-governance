@@ -30,8 +30,8 @@ Individual steps can be re run in order with `Rscript -e 'source("analysis/R/00_
 | Check | Where |
 |---|---|
 | Step status and timings | `outputs/tables/Table00_RunManifest.csv` |
-| Environment, commit, parameter hash, MIMIC file hashes | `outputs/results/run_manifest.json` (`VERIFY_MIMIC_SHA=1` recomputes the SHA256 of each MIMIC file and compares with PhysioNet's SHA256SUMS.txt) |
-| Numbers in the manuscript | `outputs/tables/Table01` to `Table14`; every reported quantity is read from these files |
+| Environment, commit, parameter hash, MIMIC file hashes | `outputs/results/run_manifest.json` (`VERIFY_MIMIC_SHA=1` recomputes the SHA256 of each MIMIC file and compares with PhysioNet's SHA256SUMS.txt). The `git_commit` field holds the pre rewrite identifier of the analysis tree; the public commit of the same tree is given in the history note at the top of `CHANGELOG.md` (3.0.0: `6c7a0f16` corresponds to `a7742eee`) |
+| Numbers in the manuscript | `outputs/tables/Table01` to `Table28` (28 tables, each as csv and md); every reported quantity is read from these files or from `outputs/results` |
 | Delayed feedback integrity | `leak_violations` column of `outputs/results/replicate_metrics.csv` must be 0 for every row (the simulator asserts it) |
 
 Seeds are fixed in `config/params.yml`; a rerun on the same MIMIC-IV release with the same package versions reproduces the tables exactly. Small numerical differences can arise across xgboost or ranger versions; the run manifest records the versions used.

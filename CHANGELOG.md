@@ -2,6 +2,23 @@
 
 All notable changes to this repository are recorded here. The format follows Keep a Changelog; versions follow semantic versioning.
 
+## Repository history note (2026-10-13)
+
+The commit history was rewritten on 2026-10-13 to remove trailer lines from commit messages. No file changed: every rewritten commit carries the same tree, author, dates and tag message as before, and the Zenodo archives are unaffected. Commit identifiers changed, so the `git_commit` field of the archived run manifests records the pre rewrite identifier of the tree that produced the outputs. The correspondence is:
+
+| Run manifest identifier | Public commit (same tree) | Role |
+|---|---|---|
+| a99b646fdf39 | 5f6ed3fbf609 | analysis code of 2.0.0 |
+| 1c98635417ce | 8efff08421c5 | archived outputs of 2.0.0 |
+| 8e6ac302bdea | 0acaa0b5b8f1 | tag v2.0.0 |
+| 29fb27e80281 | f9875be71307 | analysis code of 2.1.0 |
+| 536d6e9eecac | 7c652090455d | tag v2.1.0 |
+| 7b5703a7ede8 | ec6e3820a0a7 | pipeline 3.0.0 code |
+| 6c7a0f160db5 | a7742eee9c0f | analysis code of 3.0.0 (recorded in both 3.0.0 run manifests) |
+| 75331dc4b8ec | 3beebaf2d5b9 | tag v3.0.0 |
+
+Tree identity can be checked with `git rev-parse <commit>^{tree}` on both sides of a pair; the pre rewrite history is retained offline by the author.
+
 ## [3.0.0] - 2026-10-13
 
 Revision after independent technical review of the version 2 manuscript. The analysis changes in ways that alter the printed numbers, so this release supersedes 2.x; the direction of every finding is unchanged.
@@ -64,7 +81,7 @@ An audit on 2026-10-12 found that the version 1.0.0 pipeline (a) trained and eva
 - `06_make_comparator_results` (hindsight comparators), `activate.R` at the repository root, the 0.1.0 version string
 
 ### Note on the archived run
-The run manifest in `outputs/results/run_manifest.json` records commit a99b646, the analysis code of this release; the only later change before the tag adds the R.utils dependency to the installation instructions and CI.
+The run manifest in `outputs/results/run_manifest.json` records commit a99b646 (public commit 5f6ed3f after the history note above), the analysis code of this release; the only later change before the tag adds the R.utils dependency to the installation instructions and CI.
 
 ### Provenance note
 The GitHub history before this release consists of a single commit dated 2026-05-19. The Zenodo 1.0.0 archive (md5 96e6d441a3d1b48a75113c7662ffa9f2) corresponds to the January 2026 working copy and cannot be mapped to a commit; from 2.0.0 onward every archived version is a tagged commit.
