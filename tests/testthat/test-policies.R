@@ -93,3 +93,53 @@ test_that("gap bootstrap reproduces the full sample gaps on average and is deter
   expect_true(all(gb1[, "n_hoeffding_3"] >= n3 | is.na(gb1[, "n_hoeffding_3"])))
   expect_true(all(is.na(gb1[gb1[, "best"] == 1, "n_bernstein_1"])))
 })
+
+test_that("implied sample size is the exact smallest n (agrees with a brute force scan)", {
+  gap <- 0.04; va <- 0.0214; vb <- 0.0266; K <- 3; delta <- 0.05
+  for (m in c("hoeffding", "bernstein")) {
+    n_star <- implied_sample_size(gap, va, vb, K, delta, m)
+    f <- function(n) confidence_radius(n, K, delta, m, var = va) + confidence_radius(n, K, delta, m, var = vb)
+    expect_lt(f(n_star), gap)
+    expect_gte(f(n_star - 1), gap)
+  }
+})
+
+test_that("required delta is consistent with the implied sample size", {
+  gap <- 0.04; va <- 0.0214; vb <- 0.0266; K <- 3
+  for (m in c("hoeffding", "bernstein")) {
+    n_star <- implied_sample_size(gap, va, vb, K, 0.05, m)
+    d_req <- required_delta(gap, va, vb, K, n_star, m)
+    # at n_star observations the required confidence level is at or just below 0.05
+    expect_lte(d_req, 0.05)
+    expect_gt(required_delta(gap, va, vb, K, n_star - 50, m), d_req)
+  }
+  expect_true(required_delta(0.01, va, vb, K, 100, "hoeffding") > 1)   # no admissible level
+})
+
+test_that("Gaussian posterior Thompson sampling converges on the best arm and leaks no feedback", {
+  means <- c(0.80, 0.70, 0.60)
+  share_best <- 0
+  for (s in 1:10) {
+    st <- make_stream(3000, means, seed = 300 + s)
+    set.seed(300 + s)
+    sched <- make_schedule(3000, 0.65, 6, 72)
+    res <- run_policy("thompson_gauss", st$R, st$P, st$y, st$thr, st$cost, sched, delta = 0.05, check_leakage = TRUE)
+    expect_equal(res$leak_violations, 0)
+    share_best <- share_best + mean(res$chosen[2001:3000] == 1)
+  }
+  expect_gt(share_best / 10, 0.8)
+})
+
+test_that("signed subgroup gaps and the experienced disparity are computed as defined", {
+  st <- make_stream(600, c(0.7, 0.6), seed = 9)
+  P <- st$P; y <- st$y; thr <- rep(0.3, 2)
+  set.seed(1)
+  sched <- make_schedule(600, 0.65, 0, 0)
+  res <- run_policy("static_A", st$R, P, y, thr, st$cost, sched, static_arm = 1L)
+  ctx <- data.table::data.table(age_ge_65 = rep(0:1, length.out = 600), sex = rep(c("F", "M"), each = 300), race_group = "White")
+  m <- run_metrics(res, st$R, y, ctx, 1L, thin = 600, arm_gap = list(age = c(0.1, 0.3), sex = c(0.05, 0.2)))
+  pos <- y == 1; dep <- P[, 1] >= 0.3
+  expect_equal(unname(m$scalar["tpr_gap_age_signed"]), mean(dep[pos & ctx$age_ge_65 == 0]) - mean(dep[pos & ctx$age_ge_65 == 1]))
+  expect_equal(unname(m$scalar["tpr_gap_sex_signed"]), mean(dep[pos & ctx$sex == "F"]) - mean(dep[pos & ctx$sex == "M"]))
+  expect_equal(unname(m$scalar["experienced_gap_age"]), 0.1)   # every decision on arm 1
+})

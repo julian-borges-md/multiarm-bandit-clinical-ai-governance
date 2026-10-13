@@ -35,7 +35,10 @@ REPO_ROOT <- find_repo_root()
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-params <- yaml::read_yaml(file.path(REPO_ROOT, "config", "params.yml"))
+# PARAMS_FILE (relative to the repository root) selects an alternative parameter file, used for
+# the development window sensitivity analysis; the default is config/params.yml
+PARAMS_FILE <- Sys.getenv("PARAMS_FILE", unset = "config/params.yml")
+params <- yaml::read_yaml(file.path(REPO_ROOT, PARAMS_FILE))
 
 local_paths <- list()
 paths_file <- file.path(REPO_ROOT, "config", "paths.yml")
@@ -186,6 +189,7 @@ git_sha <- function() {
 }
 
 params_hash <- function() digest::digest(params, algo = "sha256")
+params_file <- function() PARAMS_FILE
 
 write_json_result <- function(x, name) {
   path <- file.path(cfg$dirs$results, paste0(name, ".json"))

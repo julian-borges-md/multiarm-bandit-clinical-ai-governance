@@ -6,24 +6,31 @@
 #   K arms, T decisions. P[t, a] is the calibrated mortality probability of arm a
 #   for the t-th patient of the stream, y[t] the in hospital mortality label,
 #   thr[a] the operating threshold of arm a, cost[a] its normalised cost.
-#   r_raw[t, a] = (1 - (P[t, a] - y[t])^2) - lambda_c * cost[a] - lambda_s * FN[t, a]
-#   r[t, a]     = (r_raw[t, a] + lambda_c + lambda_s) / (1 + lambda_c + lambda_s)   in [0, 1]
+#   r_raw[t, a] = u[t, a] - lambda_c * cost[t, a] - lambda_s * FN[t, a] - lambda_f * FP[t, a]
+#   r[t, a]     = (r_raw[t, a] + lambda_c + lambda_s + lambda_f) / (1 + lambda_c + lambda_s + lambda_f)   in [0, 1]
+#   u is one minus the Brier loss (primary) or binary correctness; cost may be an arm constant or a per
+#   decision value (acquisition conditional costing); lambda_f is 0 in the primary analysis.
 
 # -----------------------------------------------------------------------------
 # Reward
 # -----------------------------------------------------------------------------
 # utility: "brier" (one minus Brier loss, primary) or "accuracy" (binary correctness at the operating threshold)
-composite_reward <- function(p, y, thr, cost, lambda_c, lambda_s, utility = "brier") {
+composite_reward <- function(p, y, thr, cost, lambda_c, lambda_s, utility = "brier", lambda_f = 0) {
   fn <- as.numeric(y == 1 & p < thr)
+  fp <- as.numeric(y == 0 & p >= thr)
   u <- if (identical(utility, "accuracy")) as.numeric((p >= thr) == (y == 1)) else 1 - (p - y)^2
-  r_raw <- u - lambda_c * cost - lambda_s * fn
-  (r_raw + lambda_c + lambda_s) / (1 + lambda_c + lambda_s)
+  r_raw <- u - lambda_c * cost - lambda_s * fn - lambda_f * fp
+  (r_raw + lambda_c + lambda_s + lambda_f) / (1 + lambda_c + lambda_s + lambda_f)
 }
 
-reward_matrix <- function(P, y, thr, cost, lambda_c, lambda_s, utility = "brier") {
+# cost: a vector of K arm constants or a T x K matrix of per decision costs
+cost_column <- function(cost, a, T) if (is.matrix(cost)) cost[, a] else rep(cost[a], T)
+cost_at <- function(cost, t, a) if (is.matrix(cost)) cost[t, a] else cost[a]
+
+reward_matrix <- function(P, y, thr, cost, lambda_c, lambda_s, utility = "brier", lambda_f = 0) {
   K <- ncol(P)
   R <- matrix(NA_real_, nrow = nrow(P), ncol = K, dimnames = dimnames(P))
-  for (a in seq_len(K)) R[, a] <- composite_reward(P[, a], y, thr[a], cost[a], lambda_c, lambda_s, utility)
+  for (a in seq_len(K)) R[, a] <- composite_reward(P[, a], y, thr[a], cost_column(cost, a, nrow(P)), lambda_c, lambda_s, utility, lambda_f)
   R
 }
 
@@ -71,8 +78,11 @@ make_schedule <- function(T, arrival_rate, delay_min, delay_max) {
 
 # -----------------------------------------------------------------------------
 # Simulator
-#   policy: one of "fcae", "fcae_strat", "thompson", "ucb1", "random",
+#   policy: one of "fcae", "fcae_eb", "fcae_strat", "thompson", "thompson_gauss", "ucb1", "random",
 #           "static_A" ... (static_<arm key>), "ensemble", "heuristic"
+#   thompson: Beta posterior updated with a Bernoulli draw of the reward (Agrawal and Goyal)
+#   thompson_gauss: Gaussian posterior on the arm mean with the running sample variance,
+#                   so that the posterior uses the same reward moments as the elimination radii
 #   R: T x K reward matrix for the arms; P, thr, cost as above
 #   extra: list with ensemble/heuristic quantities (p_ens, thr_ens, cost_ens, p_heur, thr_heur, cost_heur, used_heur)
 #   stratum: integer vector (1..S) for stratified elimination
@@ -105,7 +115,7 @@ run_policy <- function(policy, R, P, y, thr, cost, schedule, delta = 0.05,
   n_feedback <- 0L
   leak_violations <- 0L
 
-  trace <- if (policy %in% c("fcae", "fcae_eb", "ucb1", "thompson")) {
+  trace <- if (policy %in% c("fcae", "fcae_eb", "ucb1", "thompson", "thompson_gauss")) {
     vector("list", ceiling(T / trace_every))
   } else NULL
   tr_i <- 0L
@@ -170,6 +180,12 @@ run_policy <- function(policy, R, P, y, thr, cost, schedule, delta = 0.05,
     } else if (policy == "thompson") {
       draws <- stats::rbeta(K, alpha, beta)
       a_t <- which.max(draws)
+    } else if (policy == "thompson_gauss") {
+      if (any(n_a == 0)) a_t <- which(n_a == 0)[1] else {
+        v <- sample_var(n_a, s_a, q_a); v[is.na(v)] <- 0.25
+        draws <- stats::rnorm(K, mean = s_a / n_a, sd = sqrt(pmax(v, 1e-6) / n_a))
+        a_t <- which.max(draws)
+      }
     } else if (policy == "ucb1") {
       if (any(n_a == 0)) a_t <- which(n_a == 0)[1] else {
         idx_u <- s_a / n_a + sqrt(2 * log(max(n_feedback, 1)) / n_a)
@@ -187,9 +203,9 @@ run_policy <- function(policy, R, P, y, thr, cost, schedule, delta = 0.05,
 
     chosen[t] <- a_t
     if (a_t >= 1L) {
-      dep_p[t] <- P[t, a_t]; dep_thr[t] <- thr[a_t]; dep_cost[t] <- cost[a_t]; dep_r[t] <- R[t, a_t]
+      dep_p[t] <- P[t, a_t]; dep_thr[t] <- thr[a_t]; dep_cost[t] <- cost_at(cost, t, a_t); dep_r[t] <- R[t, a_t]
     } else if (policy == "ensemble") {
-      dep_p[t] <- extra$p_ens[t]; dep_thr[t] <- extra$thr_ens; dep_cost[t] <- extra$cost_ens; dep_r[t] <- extra$r_ens[t]
+      dep_p[t] <- extra$p_ens[t]; dep_thr[t] <- extra$thr_ens; dep_cost[t] <- extra$cost_ens[t]; dep_r[t] <- extra$r_ens[t]
     } else {
       dep_p[t] <- extra$p_heur[t]; dep_thr[t] <- extra$thr_heur[t]; dep_cost[t] <- extra$cost_heur[t]; dep_r[t] <- extra$r_heur[t]
     }
@@ -213,15 +229,18 @@ run_policy <- function(policy, R, P, y, thr, cost, schedule, delta = 0.05,
 # -----------------------------------------------------------------------------
 # Composite (non learning) strategies: ensemble average and heuristic escalation
 # -----------------------------------------------------------------------------
-make_extra <- function(P, y, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = ncol(P), utility = "brier") {
+make_extra <- function(P, y, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = ncol(P), utility = "brier", lambda_f = 0) {
+  T <- nrow(P)
   p_ens <- rowMeans(P)
-  cost_ens <- max(cost)
-  r_ens <- composite_reward(p_ens, y, thr_ens, cost_ens, lambda_c, lambda_s, utility)
+  # the ensemble needs every input, so its cost is the largest arm cost at each decision
+  cost_ens <- if (is.matrix(cost)) apply(cost, 1, max) else rep(max(cost), T)
+  r_ens <- composite_reward(p_ens, y, thr_ens, cost_ens, lambda_c, lambda_s, utility, lambda_f)
   escalate <- P[, arm_low] >= thr[arm_low]
   p_heur <- ifelse(escalate, P[, arm_high], P[, arm_low])
   thr_heur <- ifelse(escalate, thr[arm_high], thr[arm_low])
-  cost_heur <- ifelse(escalate, cost[arm_low] + cost[arm_high], cost[arm_low])
-  r_heur <- composite_reward(p_heur, y, thr_heur, cost_heur, lambda_c, lambda_s, utility)
+  c_low <- cost_column(cost, arm_low, T); c_high <- cost_column(cost, arm_high, T)
+  cost_heur <- ifelse(escalate, c_low + c_high, c_low)
+  r_heur <- composite_reward(p_heur, y, thr_heur, cost_heur, lambda_c, lambda_s, utility, lambda_f)
   list(p_ens = p_ens, thr_ens = thr_ens, cost_ens = cost_ens, r_ens = r_ens,
        p_heur = p_heur, thr_heur = thr_heur, cost_heur = cost_heur, r_heur = r_heur, escalate = escalate)
 }
@@ -229,7 +248,10 @@ make_extra <- function(P, y, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1
 # -----------------------------------------------------------------------------
 # Per run metrics
 # -----------------------------------------------------------------------------
-run_metrics <- function(res, R, y, ctx, best_fixed_arm, thin = 10) {
+# ctx: data.table with age_ge_65, sex and (optionally) race_group for each decision
+# arm_gap: optional list with absolute per arm sensitivity gaps on the stream (age, sex), used for the
+#          disparity a patient actually experiences under a mixing policy (share weighted arm gaps)
+run_metrics <- function(res, R, y, ctx, best_fixed_arm, thin = 10, arm_gap = NULL) {
   T <- length(res$chosen); K <- ncol(R)
   oracle <- apply(R, 1, max)
   fixed <- R[, best_fixed_arm]
@@ -247,7 +269,20 @@ run_metrics <- function(res, R, y, ctx, best_fixed_arm, thin = 10) {
   }
   gap <- function(v) { v <- v[!is.na(v)]; if (length(v) < 2) NA_real_ else unname(max(v) - min(v)) }
   tpr_age <- tpr_by(ctx$age_ge_65); tpr_sex <- tpr_by(ctx$sex)
+  # signed gaps: sensitivity under 65 minus 65 and over; female minus male (levels sort as 0 < 1 and F < M)
+  signed <- function(v) if (length(v) == 2 && all(!is.na(v))) unname(v[1] - v[2]) else NA_real_
   shares <- sapply(seq_len(K), function(a) mean(res$chosen == a))
+  # race: range of sensitivity across groups with at least 30 deaths among the deployed decisions
+  tpr_race_range <- NA_real_
+  if (!is.null(ctx$race_group)) {
+    g <- ctx$race_group; lv <- sort(unique(g))
+    deaths <- sapply(lv, function(l) sum(pos & g == l))
+    v <- sapply(lv, function(l) { i <- pos & g == l; if (sum(i) == 0) NA_real_ else mean(dep_pred_pos[i]) })
+    v <- v[deaths >= 30]
+    tpr_race_range <- gap(v)
+  }
+  exp_gap_age <- if (!is.null(arm_gap)) sum(shares * arm_gap$age) else NA_real_
+  exp_gap_sex <- if (!is.null(arm_gap)) sum(shares * arm_gap$sex) else NA_real_
 
   # exploration proxy: share of pulls on arms other than the arm dominating the last decile
   last_block <- res$chosen[(floor(0.9 * T) + 1):T]
@@ -261,6 +296,8 @@ run_metrics <- function(res, R, y, ctx, best_fixed_arm, thin = 10) {
       mean_reward = mean(res$reward), mean_cost = mean(res$cost),
       auroc = auroc(y, res$p), brier = brier(y, res$p), fnr = fnr, alert_rate = mean(dep_pred_pos),
       tpr_gap_age = gap(tpr_age), tpr_gap_sex = gap(tpr_sex),
+      tpr_gap_age_signed = signed(tpr_age), tpr_gap_sex_signed = signed(tpr_sex),
+      experienced_gap_age = exp_gap_age, experienced_gap_sex = exp_gap_sex, tpr_range_race = tpr_race_range,
       explore_first_decile = explore_by_decile[1], explore_last_decile = explore_by_decile[10],
       n_feedback = res$n_feedback, leak_violations = res$leak_violations,
       stats::setNames(shares, paste0("share_arm", seq_len(K))),
@@ -279,15 +316,35 @@ run_metrics <- function(res, R, y, ctx, best_fixed_arm, thin = 10) {
 # Implied sample complexity: smallest per arm sample size at which a suboptimal arm
 # would be eliminated by the best arm, given the observed gap and variances.
 # -----------------------------------------------------------------------------
-implied_sample_size <- function(gap, var_arm, var_best, K, delta, method, n_max = 1e7) {
+# The sum of the two radii decreases in n, so the smallest n is found exactly by bisection
+# (version 2 used a 5 percent geometric grid, which overstated n by up to 5 percent).
+implied_sample_size <- function(gap, var_arm, var_best, K, delta, method, n_max = 1e9) {
   if (!is.finite(gap) || gap <= 0) return(NA_real_)
-  n <- 2
-  while (n <= n_max) {
-    r <- confidence_radius(n, K, delta, method, var = var_arm) + confidence_radius(n, K, delta, method, var = var_best)
-    if (r < gap) return(n)
-    n <- ceiling(n * 1.05) + 1
+  f <- function(n) confidence_radius(n, K, delta, method, var = var_arm) + confidence_radius(n, K, delta, method, var = var_best)
+  if (f(n_max) >= gap) return(Inf)
+  lo <- 2; hi <- n_max
+  while (hi - lo > 0) {
+    mid <- floor((lo + hi) / 2)
+    if (f(mid) < gap) hi <- mid else lo <- mid + 1
   }
-  Inf
+  lo
+}
+
+# Confidence level at which the available sample would just suffice: the delta for which the two
+# radii at n_avail observations per arm sum to the gap. Values above 1 mean that no admissible
+# confidence level permits elimination within the horizon.
+required_delta <- function(gap, var_arm, var_best, K, n_avail, method) {
+  if (!is.finite(gap) || gap <= 0 || n_avail < 2) return(NA_real_)
+  if (method == "hoeffding") {
+    # 2 sqrt(log(4 K n^2 / delta) / (2 n)) = gap  =>  delta = 4 K n^2 exp(-n gap^2 / 2)
+    return(4 * K * n_avail^2 * exp(-n_avail * gap^2 / 2))
+  }
+  # bernstein: solve for L = log(16 K n^2 / delta) by bisection (the radii increase in L)
+  g <- function(L) sqrt(2 * var_arm * L / n_avail) + sqrt(2 * var_best * L / n_avail) + 2 * 7 * L / (3 * (n_avail - 1)) - gap
+  if (g(1e-12) > 0) return(Inf)
+  lo <- 1e-12; hi <- 1e6
+  for (i in 1:200) { mid <- (lo + hi) / 2; if (g(mid) > 0) hi <- mid else lo <- mid }
+  16 * K * n_avail^2 / exp(lo)
 }
 
 # -----------------------------------------------------------------------------

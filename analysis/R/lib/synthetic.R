@@ -27,9 +27,11 @@ synthetic_features <- function(n_dev, n_stream, seed, validation_fraction = 0.25
   base <- list(heart_rate = c(88, 16), resp_rate = c(19, 5), temperature = c(37.0, 0.7), spo2 = c(96.5, 2.5),
                sbp = c(120, 20), dbp = c(65, 13), map = c(80, 14), gcs = c(13.5, 2.5))
   effect <- list(heart_rate = 7, resp_rate = 2.5, temperature = 0.15, spo2 = -1.2, sbp = -8, dbp = -4, map = -6, gcs = -1.6)
+  race_group <- sample(c("White", "Black", "Hispanic or Latino", "Asian", "Other or unknown"), n, replace = TRUE,
+                       prob = c(0.66, 0.10, 0.05, 0.03, 0.16))
   dt <- data.table::data.table(subject_id = subject_id, hadm_id = subject_id + 500000L, stay_id = subject_id + 900000L,
-                               split = split, age = age, sex = sex,
-                               anchor_year_group = ifelse(is_stream, "2020 - 2022", "2014 - 2016"))
+                               split = split, age = age, sex = sex, race_group = race_group,
+                               anchor_year_group = ifelse(is_stream, "2020 - 2022", "2014 - 2016"), anchor_offset = 0L)
   for (v in VITAL_CONCEPTS) {
     m <- base[[v]][1] + effect[[v]] * z + stats::rnorm(n, 0, base[[v]][2])
     spread <- abs(stats::rnorm(n, 0, base[[v]][2] / 2))

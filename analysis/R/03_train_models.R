@@ -22,7 +22,11 @@ set.seed(params$reproducibility$seed_models)
 feats <- load_data("features")
 feats[, sex_M := as.numeric(sex == "M")]
 feats[, age_ge_65 := as.integer(age >= 65)]
-feats[, ext_lab_available := as.integer(rowSums(!is.na(feats[, paste0("lab_", EXT_LABS, "_mean"), with = FALSE])) > 0)]
+# extended panel availability: all three extended tests observed in the window (the context used for
+# stratification); ext_lab_any records whether at least one was observed
+n_ext_present <- rowSums(!is.na(feats[, paste0("lab_", EXT_LABS, "_mean"), with = FALSE]))
+feats[, ext_lab_available := as.integer(n_ext_present == length(EXT_LABS))]
+feats[, ext_lab_any := as.integer(n_ext_present > 0)]
 for (l in LAB_CONCEPTS) data.table::set(feats, j = paste0("miss_", l), value = as.numeric(is.na(feats[[paste0("lab_", l, "_mean")]])))
 
 train  <- feats[split == "train"]
@@ -79,11 +83,24 @@ fit_arm <- function(learner, Xtr, ytr, Xes, yes) {
     list(model = m, predict = function(m, X) as.numeric(stats::predict(m, xgboost::xgb.DMatrix(X))),
          detail = sprintf("xgboost nrounds=%d (early stopping on validation half)", best))
   } else if (learner == "ranger") {
+    # tuned by the same protocol as the other arms: the early stopping half of the validation set
+    # selects mtry and the minimum node size by log loss; the frozen model is the selected fit
     df <- data.frame(y = factor(ytr, levels = c(0, 1)), Xtr)
-    m <- ranger::ranger(y ~ ., data = df, probability = TRUE, num.trees = 500, min.node.size = 10,
-                        seed = params$reproducibility$seed_models, num.threads = 4)
+    p_feat <- ncol(Xtr)
+    grid <- expand.grid(mtry = unique(pmax(1L, c(floor(sqrt(p_feat)), floor(p_feat / 3), floor(p_feat / 2)))),
+                        min.node.size = c(5L, 10L, 20L))
+    logloss <- function(y, p) { p <- pmin(pmax(p, 1e-6), 1 - 1e-6); -mean(y * log(p) + (1 - y) * log(1 - p)) }
+    fits <- lapply(seq_len(nrow(grid)), function(i) {
+      m <- ranger::ranger(y ~ ., data = df, probability = TRUE, num.trees = 500, mtry = grid$mtry[i],
+                          min.node.size = grid$min.node.size[i], seed = params$reproducibility$seed_models, num.threads = 4)
+      list(model = m, loss = logloss(yes, as.numeric(stats::predict(m, data = data.frame(Xes))$predictions[, "1"])))
+    })
+    losses <- vapply(fits, `[[`, numeric(1), "loss")
+    best_i <- which.min(losses)
+    m <- fits[[best_i]]$model
     list(model = m, predict = function(m, X) as.numeric(stats::predict(m, data = data.frame(X))$predictions[, "1"]),
-         detail = sprintf("ranger num.trees=500 mtry=%d", m$mtry))
+         detail = sprintf("ranger num.trees=500 mtry=%d min.node.size=%d (selected on validation half from %d settings)",
+                          grid$mtry[best_i], grid$min.node.size[best_i], nrow(grid)))
   } else stop("Unknown learner: ", learner)
 }
 
@@ -154,26 +171,53 @@ perf <- rbindlist(c(
 save_result(perf, "model_performance")
 save_table(perf, 4, "model_performance")
 
-# per stratum stream performance (context dependence of the arms)
+# per stratum stream performance (context dependence of the arms), with DeLong intervals for the AUROC
+auroc_ci <- function(y, p) {
+  if (sum(y == 1) < 2 || sum(y == 0) < 2) return(c(NA_real_, NA_real_, NA_real_))
+  roc <- tryCatch(pROC::roc(y, p, quiet = TRUE), error = function(e) NULL)
+  if (is.null(roc)) return(c(NA_real_, NA_real_, NA_real_))
+  as.numeric(pROC::ci.auc(roc, method = "delong"))[c(2, 1, 3)]
+}
 strat_perf <- rbindlist(lapply(seq_len(K), function(k) {
-  stream[, .(model = arms$arm[k], n = .N, events = sum(mort_hosp),
-             auroc = auroc(mort_hosp, preds_str[.I, k]), brier = brier(mort_hosp, preds_str[.I, k]),
-             fnr = classification_at(mort_hosp, preds_str[.I, k], thr[k])[["fnr"]],
-             mean_reward = mean(composite_reward(preds_str[.I, k], mort_hosp, thr[k], arms$cost[k], lc, ls))),
-         by = .(ext_lab_available, age_ge_65)]
+  stream[, {
+    ci <- auroc_ci(mort_hosp, preds_str[.I, k])
+    .(model = arms$arm[k], n = .N, events = sum(mort_hosp), auroc = ci[1], auroc_lo = ci[2], auroc_hi = ci[3],
+      brier = brier(mort_hosp, preds_str[.I, k]),
+      sensitivity = classification_at(mort_hosp, preds_str[.I, k], thr[k])[["sensitivity"]],
+      fnr = classification_at(mort_hosp, preds_str[.I, k], thr[k])[["fnr"]],
+      mean_reward = mean(composite_reward(preds_str[.I, k], mort_hosp, thr[k], arms$cost[k], lc, ls)))
+  }, by = .(ext_lab_available, age_ge_65)]
 }))
 save_result(strat_perf[order(model, ext_lab_available, age_ge_65)], "stream_performance_by_stratum")
+
+# subgroup sensitivity of each arm on the stream (signed gaps are reported by the simulation)
+wilson <- function(x, n, z = 1.959964) {
+  if (n == 0) return(c(NA_real_, NA_real_))
+  ph <- x / n; d <- 1 + z^2 / n; c0 <- (ph + z^2 / (2 * n)) / d; h <- z * sqrt(ph * (1 - ph) / n + z^2 / (4 * n^2)) / d
+  c(c0 - h, c0 + h)
+}
+stream[, age_group := fifelse(age_ge_65 == 1, "65 and over", "under 65")]
+stream[, sex_group := fifelse(sex == "F", "female", "male")]
+sub_sens <- rbindlist(lapply(seq_len(K), function(k) rbindlist(lapply(c("age_group", "sex_group", "race_group"), function(g) {
+  out <- stream[mort_hosp == 1, {
+    x <- sum(preds_str[.I, k] >= thr[k]); ci <- wilson(x, .N)
+    .(deaths = .N, detected = x, sensitivity = x / .N, sensitivity_lo = ci[1], sensitivity_hi = ci[2])
+  }, by = .(level = get(g))]
+  cbind(data.table(model = arms$arm[k], variable = g), out)
+}))))
+save_result(sub_sens[order(model, variable, level)], "arm_subgroup_sensitivity")
 
 # -----------------------------------------------------------------------------
 # 5) Validation (calibration half) and stream predictions for the simulation
 # -----------------------------------------------------------------------------
-vp <- data.table(stay_id = val_cal$stay_id, mort_hosp = val_cal$mort_hosp)
+vp <- data.table(stay_id = val_cal$stay_id, mort_hosp = val_cal$mort_hosp, ext_lab_available = val_cal$ext_lab_available,
+                 ext_lab_any = val_cal$ext_lab_any)
 for (k in seq_len(K)) data.table::set(vp, j = paste0("p_", arms$arm[k]), value = preds_cal[, k])
 save_data(vp, "validation_predictions")
 
 sp <- data.table(stay_id = stream$stay_id, subject_id = stream$subject_id, mort_hosp = stream$mort_hosp,
-                 age = stream$age, age_ge_65 = stream$age_ge_65, sex = stream$sex,
-                 ext_lab_available = stream$ext_lab_available)
+                 age = stream$age, age_ge_65 = stream$age_ge_65, sex = stream$sex, race_group = stream$race_group,
+                 ext_lab_available = stream$ext_lab_available, ext_lab_any = stream$ext_lab_any)
 for (k in seq_len(K)) data.table::set(sp, j = paste0("p_", arms$arm[k]), value = preds_str[, k])
 save_data(sp, "stream_predictions")
 msg("Static best arm on validation: %s (mean reward %.4f)", arms$arm[static_best], val_mean_reward[static_best])

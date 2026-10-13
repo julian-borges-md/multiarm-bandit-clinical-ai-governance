@@ -15,17 +15,20 @@ steps <- c("01_build_cohort.R", "02_extract_features.R", "03_train_models.R", "0
 manifest <- data.table(step = seq_along(steps), script = steps, started = as.character(NA), ended = as.character(NA),
                        elapsed_sec = NA_real_, status = "pending", error = "")
 
-for (i in seq_along(steps)) {
-  s <- steps[i]
-  manifest[i, started := format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")]
+# each step runs in its own environment (child of the global environment, so cfg and params are
+# visible) so that step scripts cannot overwrite the orchestrator's variables
+for (step_i in seq_along(steps)) {
+  s <- steps[step_i]
+  manifest[step_i, started := format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")]
   t0 <- Sys.time()
   msg("Running: %s", s)
-  res <- tryCatch({ source(file.path(cfg$repo_root, "analysis", "R", s), local = FALSE); "success" },
+  step_env <- new.env(parent = globalenv())
+  res <- tryCatch({ source(file.path(cfg$repo_root, "analysis", "R", s), local = step_env); "success" },
                   error = function(e) { msg("ERROR in %s: %s", s, conditionMessage(e)); paste("error:", conditionMessage(e)) })
-  manifest[i, `:=`(ended = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
-                   elapsed_sec = as.numeric(difftime(Sys.time(), t0, units = "secs")),
-                   status = if (res == "success") "success" else "error",
-                   error = if (res == "success") "" else res)]
+  manifest[step_i, `:=`(ended = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+                        elapsed_sec = as.numeric(difftime(Sys.time(), t0, units = "secs")),
+                        status = if (res == "success") "success" else "error",
+                        error = if (res == "success") "" else res)]
   if (res != "success") break
 }
 save_table(manifest, 0, "RunManifest")
@@ -48,7 +51,7 @@ if (identical(cfg$data_mode, "mimic") && cfg_validate_mimic(mustWork = FALSE)) {
 }
 run_manifest <- list(
   project = params$project$name, version = params$project$version, mode = cfg$data_mode,
-  git_commit = git_sha(), params_sha256 = params_hash(), r_version = R.version.string, platform = R.version$platform,
+  git_commit = git_sha(), params_file = params_file(), params_sha256 = params_hash(), r_version = R.version.string, platform = R.version$platform,
   hostname = Sys.info()[["nodename"]], run_started_utc = format(t_run, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
   elapsed_min = as.numeric(difftime(Sys.time(), t_run, units = "mins")),
   packages = as.list(pkg_versions), steps = manifest, mimic_files = mimic_sha,

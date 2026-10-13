@@ -138,7 +138,7 @@ labs_wide   <- agg_wide(lab, "lab")
 # -----------------------------------------------------------------------------
 # 4) Assemble, guarantee every expected column, save
 # -----------------------------------------------------------------------------
-baseline <- selected[, .(subject_id, hadm_id, stay_id, split, age, sex, anchor_year_group, mort_hosp, icu_los_hours)]
+baseline <- selected[, .(subject_id, hadm_id, stay_id, split, age, sex, race_group, anchor_year_group, anchor_offset, mort_hosp, icu_los_hours)]
 features <- merge(baseline, vitals_wide, by = "stay_id", all.x = TRUE)
 features <- merge(features, labs_wide, by = "stay_id", all.x = TRUE)
 expected <- c(paste0("vital_", rep(VITAL_CONCEPTS, each = 4), "_", STATS), paste0("lab_", rep(LAB_CONCEPTS, each = 4), "_", STATS))

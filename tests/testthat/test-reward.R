@@ -42,3 +42,24 @@ test_that("accuracy utility equals binary correctness at the operating threshold
   R <- reward_matrix(matrix(p[1:10], 5, 2), y[1:5], thr = c(0.3, 0.3), cost = c(0.25, 1), 0.1, 0.5, utility = "accuracy")
   expect_equal(R[1, 2], composite_reward(p[6], y[1], 0.3, 1, 0.1, 0.5, utility = "accuracy"))
 })
+
+test_that("false positive weight penalises alerts on survivors only and keeps the reward in [0, 1]", {
+  r_fp0 <- composite_reward(0.9, 0, 0.3, cost = 0.5, 0.1, 0.5, lambda_f = 0)
+  r_fp1 <- composite_reward(0.9, 0, 0.3, cost = 0.5, 0.1, 0.5, lambda_f = 0.4)
+  r_tn1 <- composite_reward(0.1, 0, 0.3, cost = 0.5, 0.1, 0.5, lambda_f = 0.4)
+  r_tn0 <- composite_reward(0.1, 0, 0.3, cost = 0.5, 0.1, 0.5, lambda_f = 0)
+  expect_lt(r_fp1 * (1 + 0.1 + 0.5 + 0.4) - (0.1 + 0.5 + 0.4), r_fp0 * (1 + 0.1 + 0.5) - (0.1 + 0.5))   # raw reward lower
+  expect_equal(r_tn1 * (1 + 0.1 + 0.5 + 0.4) - (0.1 + 0.5 + 0.4), r_tn0 * (1 + 0.1 + 0.5) - (0.1 + 0.5))  # raw reward unchanged
+  set.seed(3)
+  p <- runif(3000); y <- rbinom(3000, 1, 0.3)
+  r <- composite_reward(p, y, 0.3, cost = 1, 0.2, 1, lambda_f = 0.4)
+  expect_true(all(r >= 0 & r <= 1))
+})
+
+test_that("per decision cost matrices are applied elementwise", {
+  P <- matrix(c(0.2, 0.8, 0.5, 0.1), 2, 2); y <- c(1, 0)
+  Cm <- matrix(c(0.25, 0.25, 1.0, 0.6), 2, 2)
+  R <- reward_matrix(P, y, thr = c(0.3, 0.3), cost = Cm, 0.1, 0.5)
+  expect_equal(R[2, 2], composite_reward(0.1, 0, 0.3, 0.6, 0.1, 0.5))
+  expect_equal(R[1, 2], composite_reward(0.5, 1, 0.3, 1.0, 0.1, 0.5))
+})

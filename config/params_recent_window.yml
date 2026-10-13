@@ -1,0 +1,102 @@
+# Sensitivity analysis: development pool restricted to the 2017 to 2019 anchor year group.
+# Identical to params.yml in every other respect. Run with PARAMS_FILE=config/params_recent_window.yml
+# and OUTPUT_DIR set to a separate directory.
+project:
+  name: "multiarm-bandit-clinical-ai-governance"
+  version: "3.0.0"
+
+data:
+  # "mimic" reads MIMIC-IV v3.1 from config/paths.yml (MIMIC_IV_DIR); "synthetic" needs no data access
+  mode: "mimic"
+  mimic_version: "3.1"
+  mimic_doi: "10.13026/kpb9-mt58"
+
+reproducibility:
+  seed_global: 20260101
+  seed_split: 20260102
+  seed_models: 20260103
+  seed_simulation: 20260104
+  seed_synthetic: 20260105
+
+cohort:
+  age_min: 18
+  icu_los_min_hours: 24
+  icu_los_max_days: 60
+  development_year_groups: ["2017 - 2019"]   # recent window sensitivity analysis (Supplementary material)
+  deployment_year_groups: ["2020 - 2022"]
+  development_n: 20000
+  validation_fraction: 0.25
+  stream_n: 10000
+  deployment_start_year: 2020        # development stays must have a real calendar window ending before this year
+  development_stay_rule: "guaranteed_before_deployment"   # or "any" (version 2 behaviour)
+
+features:
+  window_hours: 24
+  target_sensitivity: 0.80
+
+arms:
+  - key: "A"
+    label: "Ridge logistic regression, demographics and vitals"
+    learner: "glmnet_ridge"
+    feature_set: "vitals"
+    cost: 0.25
+  - key: "B"
+    label: "Gradient boosted trees, demographics, vitals and core laboratory panel"
+    learner: "xgboost"
+    feature_set: "core_labs"
+    cost: 0.60
+  - key: "C"
+    label: "Random forest, all features including extended laboratory tests"
+    learner: "ranger"
+    feature_set: "all"
+    cost: 1.00
+
+reward:
+  utility: "brier"            # "brier" (one minus Brier loss) or "accuracy" (binary correctness at the operating threshold)
+  lambda_cost: 0.10
+  lambda_safety: 0.50
+  lambda_false_positive: 0.0  # alert burden weight; 0 in the primary analysis, varied in sensitivity analyses
+  safety_event: "false_negative"
+
+governance:
+  delta: 0.05
+  strata: ["ext_lab_available", "age_ge_65"]   # ext_lab_available: all three extended laboratory tests observed in the window
+
+delay:
+  min_hours: 6
+  max_hours: 72
+  arrival_rate_per_hour: null   # null: estimated from the full cohort size over the 2008 to 2022 span
+
+simulation:
+  replicates: 100
+  sensitivity_replicates: 30
+  bootstrap_resamples: 2000
+  regret_curve_thin: 10
+  lambda_cost_grid: [0.0, 0.10, 0.20]
+  lambda_safety_grid: [0.0, 0.50, 1.00]
+  delta_grid: [0.01, 0.05, 0.10]
+  utility_alternatives: ["accuracy"]
+  gap_bootstrap_resamples: 1000
+  lambda_false_positive_grid: [0.10, 0.20, 0.40]
+  cost_vectors:                      # alternative normalised cost assignments for arms A, B, C
+    - {label: "primary", costs: [0.25, 0.60, 1.00]}
+    - {label: "compressed", costs: [0.45, 0.60, 0.75]}
+    - {label: "expanded", costs: [0.10, 0.55, 1.00]}
+    - {label: "equal", costs: [0.60, 0.60, 0.60]}
+  acquisition_conditional_cost: true # arm C charged at arm B's cost when the extended panel is absent from the record
+  drift_scenarios:                   # deployment drift that makes the validation chosen arm inferior on the stream:
+                                     # Gaussian noise on the logit of the arm's probabilities from a given point of the stream
+    - {label: "arm_A_drift_from_start", arm: "A", start_fraction: 0.0, logit_noise_sd: 1.5}
+    - {label: "arm_A_drift_from_third", arm: "A", start_fraction: 0.3333, logit_noise_sd: 1.5}
+  drift_delay_scenarios: ["none", "primary", "long"]   # delay scenarios run for the first drift scenario
+  extended_horizon:
+    T: 30000          # stream resampled with replacement to test elimination beyond the available horizon
+    replicates: 30
+  delay_scenarios:
+    - {label: "none", min_hours: 0, max_hours: 0}
+    - {label: "primary", min_hours: 6, max_hours: 72}
+    - {label: "long", min_hours: 24, max_hours: 168}
+
+synthetic:
+  n_development: 6000
+  n_stream: 2000

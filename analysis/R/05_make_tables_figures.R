@@ -19,9 +19,10 @@ strat <- load_result("stream_performance_by_stratum")
 trace_path <- file.path(cfg$dirs$results, "fcae_trace_rep1.csv")
 
 fmt_ci <- function(m, lo, hi, d = 3) sprintf(paste0("%.", d, "f (%.", d, "f to %.", d, "f)"), m, lo, hi)
-main_pols <- c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1", "random", "static_best", "ensemble", "heuristic")
+main_pols <- c("fcae", "fcae_eb", "fcae_strat", "thompson", "thompson_gauss", "ucb1", "random", "static_best",
+               paste0("static_", setdiff(arms$arm, arms$arm[arms$static_best])), "ensemble", "heuristic")
 theme_set(theme_minimal(base_size = 11))
-pal <- c("fcae" = "#1b4f72", "fcae_eb" = "#5dade2", "fcae_strat" = "#2e86c1", "thompson" = "#b9770e", "ucb1" = "#7d6608",
+pal <- c("fcae" = "#1b4f72", "fcae_eb" = "#5dade2", "fcae_strat" = "#2e86c1", "thompson" = "#b9770e", "thompson_gauss" = "#e67e22", "ucb1" = "#7d6608",
          "random" = "#7b7d7d", "static_best" = "#117a65", "ensemble" = "#884ea0", "heuristic" = "#cb4335")
 for (k in seq_len(K)) pal[paste0("static_", arms$arm[k])] <- c("#1e8449", "#239b56", "#28b463")[k]
 
@@ -38,7 +39,12 @@ t5 <- summ[, .(
   auroc = fmt_ci(auroc_mean, auroc_p2.5, auroc_p97.5, 3),
   brier = fmt_ci(brier_mean, brier_p2.5, brier_p97.5, 4),
   sensitivity_gap_age = fmt_ci(tpr_gap_age_mean, tpr_gap_age_p2.5, tpr_gap_age_p97.5, 3),
-  sensitivity_gap_sex = fmt_ci(tpr_gap_sex_mean, tpr_gap_sex_p2.5, tpr_gap_sex_p97.5, 3)
+  sensitivity_gap_sex = fmt_ci(tpr_gap_sex_mean, tpr_gap_sex_p2.5, tpr_gap_sex_p97.5, 3),
+  sensitivity_gap_age_signed = fmt_ci(tpr_gap_age_signed_mean, tpr_gap_age_signed_p2.5, tpr_gap_age_signed_p97.5, 3),
+  sensitivity_gap_sex_signed = fmt_ci(tpr_gap_sex_signed_mean, tpr_gap_sex_signed_p2.5, tpr_gap_sex_signed_p97.5, 3),
+  experienced_gap_age = fmt_ci(experienced_gap_age_mean, experienced_gap_age_p2.5, experienced_gap_age_p97.5, 3),
+  experienced_gap_sex = fmt_ci(experienced_gap_sex_mean, experienced_gap_sex_p2.5, experienced_gap_sex_p97.5, 3),
+  sensitivity_range_race = fmt_ci(tpr_range_race_mean, tpr_range_race_p2.5, tpr_range_race_p97.5, 3)
 )]
 shares <- summ[, c("policy", paste0("share_arm", seq_len(K), "_mean")), with = FALSE]
 setnames(shares, paste0("share_arm", seq_len(K), "_mean"), paste0("share_arm_", arms$arm))
@@ -48,7 +54,7 @@ save_table(t5, 5, "strategy_summary")
 # -----------------------------------------------------------------------------
 # Table 6: paired differences versus static best and versus FCAE
 # -----------------------------------------------------------------------------
-t6 <- pd[metric %in% c("cum_regret_fixed", "mean_reward", "mean_cost", "fnr", "auroc", "tpr_gap_age", "tpr_gap_sex"),
+t6 <- pd[metric %in% c("cum_regret_fixed", "mean_reward", "mean_cost", "fnr", "auroc", "tpr_gap_age", "tpr_gap_sex", "tpr_gap_age_signed", "tpr_gap_sex_signed", "experienced_gap_age", "experienced_gap_sex"),
          .(reference, policy, metric, mean_policy = round(mean_policy, 4), mean_reference = round(mean_reference, 4),
            difference = fmt_ci(diff_mean, diff_lo, diff_hi, 4), relative_pct = round(relative_pct, 1),
            share_of_replicates_lower = round(share_lower, 2))]
@@ -57,27 +63,28 @@ save_table(t6, 6, "paired_differences")
 # -----------------------------------------------------------------------------
 # Table 7: elimination and exploration
 # -----------------------------------------------------------------------------
-dec_w <- dcast(dec[policy %in% c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1")], policy ~ decile, value.var = "explore_share_mean")
+dec_w <- dcast(dec[policy %in% c("fcae", "fcae_eb", "fcae_strat", "thompson", "thompson_gauss", "ucb1")], policy ~ decile, value.var = "explore_share_mean")
 setnames(dec_w, as.character(1:10), paste0("decile_", 1:10))
 save_table(dec_w, 7, "exploration_by_decile")
 save_table(elim, 8, "elimination_summary")
 isc <- load_result("implied_sample_complexity")
 ext <- load_result("extended_horizon_summary")
-save_table(ext[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)], 15, "extended_horizon")
-save_table(isc[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)], 14, "implied_sample_complexity")
+sig <- function(dt) dt[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 6) else x)]
+save_table(sig(ext), 15, "extended_horizon")
+save_table(sig(isc), 14, "implied_sample_complexity")
 
 # -----------------------------------------------------------------------------
 # Tables 16 and 17: utility functional sensitivity and patient level gap bootstrap
 # -----------------------------------------------------------------------------
 sens_u <- load_result("sensitivity_utility")
-isc_u <- load_result("implied_sample_complexity_utility")
+isc_u <- load_result("implied_sample_complexity_scenarios")
 gbs <- load_result("gap_bootstrap")
 save_table(sens_u[, c(.(utility = utility, policy = policy, best_fixed_arm = best_fixed_arm, static_best_arm = static_best_arm,
                         cum_regret_fixed = fmt_ci(cum_regret_fixed_mean, cum_regret_fixed_lo, cum_regret_fixed_hi, 1),
                         mean_reward = round(mean_reward_mean, 4), mean_cost = round(mean_cost_mean, 3), fnr = round(fnr_mean, 3)),
                       lapply(.SD, function(x) round(x, 2))), .SDcols = grep("^eliminated_share_arm_", names(sens_u), value = TRUE)],
            16, "sensitivity_utility")
-save_table(isc_u[, lapply(.SD, function(x) if (is.numeric(x)) signif(x, 4) else x)], 18, "implied_sample_complexity_utility")
+save_table(sig(isc_u), 18, "implied_sample_complexity_scenarios")
 fmt_n <- function(m, lo, hi) { f <- function(x) formatC(round(x), format = "d", big.mark = ","); ifelse(is.na(m), "best arm", sprintf("%s (%s to %s)", f(m), f(lo), f(hi))) }
 save_table(gbs[, .(arm, resamples, share_best = round(share_best, 3),
                    mean_reward = fmt_ci(mean_reward_point, mean_reward_lo, mean_reward_hi, 4),
@@ -86,6 +93,25 @@ save_table(gbs[, .(arm, resamples, share_best = round(share_best, 3),
                    n_per_arm_bernstein = fmt_n(n_per_arm_bernstein_point, n_per_arm_bernstein_lo, n_per_arm_bernstein_hi),
                    share_resamples_n_bernstein_within_stream = round(share_resamples_n_bernstein_within_stream, 3))],
            17, "gap_bootstrap")
+
+# -----------------------------------------------------------------------------
+# Tables 19 to 28: cost vector, false positive weight, acquisition conditional cost, drift,
+# subgroup sensitivity, break even weight, drift description, stay offsets, acquisition cost summary
+# -----------------------------------------------------------------------------
+scen_cols <- function(dt, label_cols) dt[, c(label_cols, "policy", "best_fixed_arm", "static_best_arm", "cum_regret_fixed_mean", "cum_regret_fixed_lo", "cum_regret_fixed_hi",
+                                              "static_best_regret_mean", "mean_cost_mean", "fnr_mean", "auroc_mean",
+                                              grep("^share_arm_|^eliminated_share_arm_|^median_elim_step_arm_", names(dt), value = TRUE)), with = FALSE]
+save_table(sig(scen_cols(load_result("sensitivity_cost_vector"), c("cost_vector", "costs"))), 19, "sensitivity_cost_vector")
+save_table(sig(scen_cols(load_result("sensitivity_false_positive"), "lambda_false_positive")), 20, "sensitivity_false_positive")
+if (file.exists(file.path(cfg$dirs$results, "sensitivity_acquisition_cost.csv"))) {
+  save_table(sig(scen_cols(load_result("sensitivity_acquisition_cost"), "cost_model")), 21, "sensitivity_acquisition_cost")
+  save_table(sig(load_result("acquisition_conditional_cost_summary")), 28, "acquisition_conditional_cost_summary")
+}
+save_table(sig(scen_cols(load_result("sensitivity_drift"), c("drift_scenario", "drift_arm", "drift_start_fraction", "logit_noise_sd", "delay_scenario"))), 22, "sensitivity_drift")
+save_table(sig(load_result("arm_subgroup_sensitivity")), 24, "arm_subgroup_sensitivity")
+save_table(sig(load_result("false_positive_break_even")), 25, "false_positive_break_even")
+save_table(sig(load_result("drift_scenario_description")), 26, "drift_scenario_description")
+if (file.exists(file.path(cfg$dirs$results, "stay_offset_distribution.csv"))) save_table(load_result("stay_offset_distribution"), 27, "stay_offset_distribution")
 
 # -----------------------------------------------------------------------------
 # Tables 9 to 11: sensitivity analyses
@@ -103,8 +129,8 @@ save_table(sens_d[, c(.(delta = delta, policy = policy, cum_regret_fixed = fmt_c
                   .SDcols = grep("^eliminated_share_arm_", names(sens_d), value = TRUE)], 11, "sensitivity_delta")
 save_table(sens_y[, .(delay_scenario, policy, cum_regret_fixed = fmt_ci(cum_regret_fixed_mean, cum_regret_fixed_lo, cum_regret_fixed_hi, 1),
                       mean_reward = round(mean_reward_mean, 4), fnr = round(fnr_mean, 3))], 12, "sensitivity_delay")
-save_table(strat[, .(model, ext_lab_available, age_ge_65, n, events, auroc = round(auroc, 3), brier = round(brier, 4),
-                     fnr = round(fnr, 3), mean_reward = round(mean_reward, 4))], 13, "stream_performance_by_stratum")
+save_table(strat[, .(model, ext_lab_available, age_ge_65, n, events, auroc = round(auroc, 3), auroc_lo = round(auroc_lo, 3), auroc_hi = round(auroc_hi, 3),
+                     brier = round(brier, 4), sensitivity = round(sensitivity, 3), fnr = round(fnr, 3), mean_reward = round(mean_reward, 4))], 13, "stream_performance_by_stratum")
 
 # -----------------------------------------------------------------------------
 # Figure 2: cumulative regret curves
@@ -126,7 +152,7 @@ save_fig(p2, 2, "CumulativeRegret", width = 8.5, height = 6)
 if (file.exists(trace_path)) {
   tr <- fread(trace_path)
   tr[, arm_key := factor(arm_key, levels = arms$arm)]
-  tr[, bound := ifelse(policy == "fcae", "Hoeffding bound", "Empirical Bernstein bound")]
+  tr[, bound := factor(ifelse(policy == "fcae", "Hoeffding bound", "Empirical Bernstein bound"), levels = c("Hoeffding bound", "Empirical Bernstein bound"))]
   p3a <- ggplot(tr[!is.na(mean) & is.finite(lcb)], aes(x = t, colour = arm_key, fill = arm_key)) +
     geom_ribbon(aes(ymin = pmax(lcb, 0), ymax = pmin(ucb, 1)), alpha = 0.15, colour = NA) +
     geom_line(aes(y = mean), linewidth = 0.8) + facet_wrap(~ bound, ncol = 1) +
@@ -134,8 +160,8 @@ if (file.exists(trace_path)) {
     theme(legend.position = "bottom")
   save_fig(p3a, 3, "FCAE_ConfidenceBounds", width = 8, height = 7)
 }
-dec_m <- dec[policy %in% c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1")]
-dec_m[, policy := factor(policy, levels = c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1"))]
+dec_m <- dec[policy %in% c("fcae", "fcae_eb", "fcae_strat", "thompson", "thompson_gauss", "ucb1")]
+dec_m[, policy := factor(policy, levels = c("fcae", "fcae_eb", "fcae_strat", "thompson", "thompson_gauss", "ucb1"))]
 p4 <- ggplot(dec_m, aes(x = decile, y = explore_share_mean, colour = policy)) +
   geom_line(linewidth = 0.8) + geom_point() +
   geom_errorbar(aes(ymin = explore_share_lo, ymax = explore_share_hi), width = 0.2, alpha = 0.6) +

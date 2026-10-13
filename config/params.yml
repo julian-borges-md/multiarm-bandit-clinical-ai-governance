@@ -1,7 +1,7 @@
 # Governance simulation parameters (version controlled; no local paths here)
 project:
   name: "multiarm-bandit-clinical-ai-governance"
-  version: "2.1.0"
+  version: "3.0.0"
 
 data:
   # "mimic" reads MIMIC-IV v3.1 from config/paths.yml (MIMIC_IV_DIR); "synthetic" needs no data access
@@ -25,6 +25,8 @@ cohort:
   development_n: 20000
   validation_fraction: 0.25
   stream_n: 10000
+  deployment_start_year: 2020        # development stays must have a real calendar window ending before this year
+  development_stay_rule: "guaranteed_before_deployment"   # or "any" (version 2 behaviour)
 
 features:
   window_hours: 24
@@ -51,11 +53,12 @@ reward:
   utility: "brier"            # "brier" (one minus Brier loss) or "accuracy" (binary correctness at the operating threshold)
   lambda_cost: 0.10
   lambda_safety: 0.50
+  lambda_false_positive: 0.0  # alert burden weight; 0 in the primary analysis, varied in sensitivity analyses
   safety_event: "false_negative"
 
 governance:
   delta: 0.05
-  strata: ["ext_lab_available", "age_ge_65"]
+  strata: ["ext_lab_available", "age_ge_65"]   # ext_lab_available: all three extended laboratory tests observed in the window
 
 delay:
   min_hours: 6
@@ -72,6 +75,20 @@ simulation:
   delta_grid: [0.01, 0.05, 0.10]
   utility_alternatives: ["accuracy"]
   gap_bootstrap_resamples: 1000
+  lambda_false_positive_grid: [0.10, 0.20, 0.40]
+  cost_vectors:                      # alternative normalised cost assignments for arms A, B, C
+    - {label: "primary", costs: [0.25, 0.60, 1.00]}
+    - {label: "compressed", costs: [0.45, 0.60, 0.75]}
+    - {label: "expanded", costs: [0.10, 0.55, 1.00]}
+    - {label: "equal", costs: [0.60, 0.60, 0.60]}
+  acquisition_conditional_cost: true # arm C charged at arm B's cost when the extended panel is absent from the record
+  drift_scenarios:                   # deployment drift that makes the validation chosen arm inferior on the stream:
+                                     # Gaussian noise on the logit of the arm's probabilities from a given point of the stream
+    - {label: "arm_A_moderate_from_start", arm: "A", start_fraction: 0.0, logit_noise_sd: 1.5}    # discrimination loss, AUROC about 0.75
+    - {label: "arm_A_moderate_from_third", arm: "A", start_fraction: 0.3333, logit_noise_sd: 1.5}
+    - {label: "arm_A_severe_from_start", arm: "A", start_fraction: 0.0, logit_noise_sd: 4.0}      # broken model, AUROC near 0.6
+    - {label: "arm_A_severe_from_third", arm: "A", start_fraction: 0.3333, logit_noise_sd: 4.0}
+  drift_delay_scenarios: ["none", "primary", "long"]   # delay scenarios run for every drift scenario
   extended_horizon:
     T: 30000          # stream resampled with replacement to test elimination beyond the available horizon
     replicates: 30
