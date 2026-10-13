@@ -1,154 +1,260 @@
 # analysis/R/04_run_bandit_simulation.R
-# Run contextual bandit governance simulation using model predictions
-# Inputs:
-#   outputs/data/preds_eval.csv.gz
-#   outputs/data/features_eval.csv.gz
-# Outputs:
-#   outputs/tables/Table05_bandit_summary.csv
-#   outputs/data/bandit_trace.csv.gz
-#   outputs/figures/Figure04_BanditRegret.png  (and pdf)
+# Sequential deployment simulation on the deployment stream: governance policies,
+# delayed feedback, replicates, paired comparisons and sensitivity analyses.
+#
+# Inputs:  data/stream_predictions.csv.gz, results/arms_meta.csv, results/stream_meta.json
+# Outputs (results/): replicate_metrics.csv, strategy_summary.csv, paired_differences.csv,
+#   regret_curves.csv, exploration_deciles.csv, fcae_trace_rep1.csv, elimination_summary.csv,
+#   sensitivity_lambda.csv, sensitivity_delta.csv, sensitivity_delay.csv, simulation_meta.json
 
-suppressPackageStartupMessages({
-  library(data.table)
-  library(ggplot2)
-})
-
-# -----------------------------
-# 0) Load setup once
-# -----------------------------
-if (!exists("cfg", inherits = TRUE) || !is.list(cfg) || is.null(cfg$output_dir)) {
-  source("analysis/R/00_setup.R")
+if (!exists("cfg", inherits = TRUE)) source(file.path("analysis", "R", "00_setup.R"))
+suppressPackageStartupMessages({ library(data.table); library(jsonlite); library(parallel) })
+n_cores <- max(1L, min(as.integer(Sys.getenv("SIM_CORES", unset = max(1L, parallel::detectCores() - 2L))), 12L))
+par_lapply <- function(X, FUN) {
+  if (n_cores > 1 && .Platform$OS.type != "windows") parallel::mclapply(X, FUN, mc.cores = n_cores, mc.set.seed = FALSE) else lapply(X, FUN)
 }
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "metrics.R"))
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "policies.R"))
+
 msg("04_run_bandit_simulation.R starting")
-set.seed(cfg$seed)
+t_start <- Sys.time()
 
-# -----------------------------
-# 1) Validate required upstream artifacts
-# -----------------------------
-preds_gz    <- file.path(cfg$out_data_dir, "preds_eval.csv.gz")
-features_gz <- file.path(cfg$out_data_dir, "features_eval.csv.gz")
+sp <- load_data("stream_predictions")
+arms_meta <- load_result("arms_meta")
+arms <- arms_meta[arm != "ensemble"]
+K <- nrow(arms)
+meta <- jsonlite::read_json(file.path(cfg$dirs$results, "stream_meta.json"))
+arrival_rate <- as.numeric(meta$arrival_rate_per_hour)
 
-if (!file.exists(preds_gz)) {
-  stop("Missing outputs/data/preds_eval.csv.gz. Run 03_train_models.R first.")
-}
-if (!file.exists(features_gz)) {
-  stop("Missing outputs/data/features_eval.csv.gz. Run 02_extract_features.R first.")
-}
+P <- as.matrix(sp[, paste0("p_", arms$arm), with = FALSE]); colnames(P) <- arms$arm
+y <- as.integer(sp$mort_hosp)
+T <- nrow(P)
+thr <- arms$threshold; cost <- arms$cost
+thr_ens <- arms_meta[arm == "ensemble", threshold]
+static_best <- which(arms$static_best)[1]
+ctx <- sp[, .(age_ge_65, sex, ext_lab_available)]
+stratum_all <- 1L + ctx$ext_lab_available + 2L * ctx$age_ge_65
+msg("Stream: %d decisions, %d events, K=%d, static best arm on validation = %s", T, sum(y), K, arms$arm[static_best])
 
-preds_csv    <- ensure_unzipped(preds_gz, cache_dir = cfg$out_cache_dir)
-features_csv <- ensure_unzipped(features_gz, cache_dir = cfg$out_cache_dir)
+policies_all <- c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1", "random", "static_best",
+                  paste0("static_", arms$arm), "ensemble", "heuristic")
+policy_label <- c(fcae = "Fixed confidence action elimination (Hoeffding bound)",
+                  fcae_eb = "Fixed confidence action elimination (empirical Bernstein bound)",
+                  fcae_strat = "Fixed confidence action elimination (stratified, empirical Bernstein)",
+                  thompson = "Thompson sampling", ucb1 = "UCB1", random = "Uniform random",
+                  static_best = sprintf("Static deployment, validation best (arm %s)", arms$arm[static_best]),
+                  ensemble = "Ensemble average", heuristic = "Heuristic escalation")
+for (k in seq_len(K)) policy_label[paste0("static_", arms$arm[k])] <- sprintf("Static deployment, arm %s", arms$arm[k])
 
-preds <- data.table::fread(file = preds_csv, showProgress = FALSE)
-feat  <- data.table::fread(file = features_csv, showProgress = FALSE)
+vp <- load_data("validation_predictions")
+P_val <- as.matrix(vp[, paste0("p_", arms$arm), with = FALSE]); y_val <- as.integer(vp$mort_hosp)
+# the static comparator is always chosen on validation data under the scenario's own weights
+validation_best_arm <- function(lambda_c, lambda_s) which.max(colMeans(reward_matrix(P_val, y_val, thr, cost, lambda_c, lambda_s)))
+stopifnot(validation_best_arm(params$reward$lambda_cost, params$reward$lambda_safety) == static_best)
 
-# Ensure required columns exist
-need_pred_cols <- c("mort_hosp", "pred_glm", "pred_rf", "pred_xgb")
-miss_pred_cols <- setdiff(need_pred_cols, names(preds))
-if (length(miss_pred_cols) > 0) {
-  stop(sprintf("preds_eval is missing columns: %s", paste(miss_pred_cols, collapse = ", ")))
-}
-
-# Merge minimal context needed
-key <- intersect(c("stay_id"), names(preds))
-if (length(key) == 1 && "stay_id" %in% names(feat)) {
-  dt <- merge(preds, feat[, .(stay_id, age, sex)], by = "stay_id", all.x = TRUE)
-} else {
-  dt <- copy(preds)
-}
-
-dt[, mort_hosp := as.integer(mort_hosp)]
-
-# -----------------------------
-# 2) Define arms and reward (example)
-# -----------------------------
-# Arms are the three model predictions. Reward here is negative log loss plus optional cost and safety penalty.
-# You can later replace with your formal utility from the Methods section.
-arms <- c("pred_glm", "pred_rf", "pred_xgb")
-
-clip01 <- function(x) pmin(pmax(x, 1e-6), 1 - 1e-6)
-
-logloss <- function(y, p) {
-  p <- clip01(p)
-  -(y * log(p) + (1 - y) * log(1 - p))
+static_index <- function(policy, sb = static_best) {
+  if (policy == "static_best") return(sb)
+  if (startsWith(policy, "static_")) return(match(sub("^static_", "", policy), arms$arm))
+  NA_integer_
 }
 
-# Example per arm cost and safety weights (placeholder)
-# You can wire these to cfg$lambda_cost and cfg$lambda_safety as you finalize Methods.
-arm_cost <- c(pred_glm = 0.10, pred_rf = 0.15, pred_xgb = 0.20)
-
-# -----------------------------
-# 3) Simple bandit policy (epsilon greedy placeholder)
-# -----------------------------
-# This is a clean baseline implementation to unblock the pipeline.
-# Replace with your contextual policy (LinUCB, Thompson, etc) when ready.
-
-epsilon <- 0.10
-n <- nrow(dt)
-
-# Online estimates
-q_hat <- setNames(rep(0, length(arms)), arms)
-n_arm <- setNames(rep(0, length(arms)), arms)
-
-trace <- data.table(
-  t = integer(n),
-  chosen_arm = character(n),
-  y = integer(n),
-  p = numeric(n),
-  loss = numeric(n),
-  utility = numeric(n)
-)
-
-for (i in seq_len(n)) {
-  # choose arm
-  if (runif(1) < epsilon) {
-    a <- sample(arms, 1)
-  } else {
-    a <- names(which.min(q_hat))
+# -----------------------------------------------------------------------------
+# One replicate for a set of policies under one scenario
+# -----------------------------------------------------------------------------
+run_replicate <- function(rep, policies, lambda_c, lambda_s, delta, delay_min, delay_max, keep_trace = FALSE, thin = 10) {
+  set.seed(params$reproducibility$seed_simulation + rep)
+  ord <- sample.int(T)
+  Pr <- P[ord, , drop = FALSE]; yr <- y[ord]; ctx_r <- ctx[ord]; st_r <- stratum_all[ord]
+  R <- reward_matrix(Pr, yr, thr, cost, lambda_c, lambda_s)
+  best_fixed <- which.max(colSums(R))
+  extra <- make_extra(Pr, yr, thr, cost, lambda_c, lambda_s, thr_ens, arm_low = 1L, arm_high = K)
+  sched <- make_schedule(T, arrival_rate, delay_min, delay_max)
+  sb <- validation_best_arm(lambda_c, lambda_s)
+  rows <- list(); curves <- list(); deciles <- list(); trace <- list()
+  for (pol in policies) {
+    res <- run_policy(pol, R, Pr, yr, thr, cost, sched, delta = delta, stratum = st_r, extra = extra,
+                      static_arm = static_index(pol, sb), trace_every = thin, check_leakage = TRUE)
+    m <- run_metrics(res, R, yr, ctx_r, best_fixed, thin = thin)
+    rows[[pol]] <- data.table(rep = rep, policy = pol, best_fixed_arm = arms$arm[best_fixed], static_best_arm = arms$arm[sb], t(m$scalar))
+    curves[[pol]] <- cbind(rep = rep, policy = pol, m$curve)
+    deciles[[pol]] <- data.table(rep = rep, policy = pol, decile = 1:10, explore_share = m$explore_by_decile)
+    if (keep_trace && pol %in% c("fcae", "fcae_eb")) trace[[pol]] <- cbind(rep = rep, policy = pol, res$trace)
   }
-  
-  y <- dt$mort_hosp[i]
-  p <- dt[[a]][i]
-  
-  loss_i <- logloss(y, p)
-  util_i <- -(loss_i + cfg$lambda_cost * arm_cost[[a]])
-  
-  # update
-  n_arm[[a]] <- n_arm[[a]] + 1
-  q_hat[[a]] <- q_hat[[a]] + (loss_i - q_hat[[a]]) / n_arm[[a]]
-  
-  trace[i, `:=`(
-    t = i,
-    chosen_arm = a,
-    y = y,
-    p = p,
-    loss = loss_i,
-    utility = util_i
-  )]
+  list(metrics = rbindlist(rows), curves = rbindlist(curves), deciles = rbindlist(deciles),
+       trace = if (length(trace)) rbindlist(trace) else NULL)
 }
 
-# -----------------------------
-# 4) Summaries and artifacts
-# -----------------------------
-summary_tbl <- trace[, .(
-  n = .N,
-  mean_loss = mean(loss, na.rm = TRUE),
-  mean_utility = mean(utility, na.rm = TRUE)
-)]
+# -----------------------------------------------------------------------------
+# 1) Primary analysis
+# -----------------------------------------------------------------------------
+lc <- params$reward$lambda_cost; ls <- params$reward$lambda_safety; delta <- params$governance$delta
+dmin <- params$delay$min_hours; dmax <- params$delay$max_hours
+Rn <- params$simulation$replicates
+thin <- params$simulation$regret_curve_thin
+msg("Primary scenario: lambda_c=%.2f lambda_s=%.2f delta=%.2f delay=[%g,%g] h, %d replicates", lc, ls, delta, dmin, dmax, Rn)
 
-arm_tbl <- trace[, .(
-  n = .N,
-  mean_loss = mean(loss, na.rm = TRUE),
-  mean_utility = mean(utility, na.rm = TRUE)
-), by = chosen_arm][order(chosen_arm)]
+msg("Using %d cores for replicates", n_cores)
+prim <- par_lapply(seq_len(Rn), function(r) run_replicate(r, policies_all, lc, ls, delta, dmin, dmax, keep_trace = (r == 1), thin = thin))
+bad <- which(!vapply(prim, is.list, logical(1)))
+if (length(bad)) stop_log("Replicates failed: %s", paste(bad, collapse = ","))
+metrics <- rbindlist(lapply(prim, `[[`, "metrics"))
+curves  <- rbindlist(lapply(prim, `[[`, "curves"))
+deciles <- rbindlist(lapply(prim, `[[`, "deciles"))
+trace1  <- prim[[1]]$trace
+metrics[, policy_label := policy_label[policy]]
+save_result(metrics, "replicate_metrics")
+if (any(metrics$leak_violations > 0)) stop_log("Delayed feedback leakage detected in the simulator")
 
-save_table(summary_tbl, 5, "bandit_summary_overall")
-save_table(arm_tbl, 6, "bandit_summary_by_arm")
-save_data(trace, "bandit_trace")
+# strategy summary (mean, sd, percentiles) per policy and metric
+metric_cols <- c("cum_regret_fixed", "cum_regret_oracle", "mean_reward", "mean_cost", "auroc", "brier", "fnr",
+                 "alert_rate", "tpr_gap_age", "tpr_gap_sex", "explore_first_decile", "explore_last_decile",
+                 paste0("share_arm", seq_len(K)))
+summ <- metrics[, {
+  out <- list()
+  for (mc in metric_cols) { s <- summary_stats(get(mc)); for (nm in names(s)[1:5]) out[[paste0(mc, "_", nm)]] <- s[[nm]] }
+  out
+}, by = .(policy, policy_label)]
+summ <- summ[match(policies_all, policy)]
+save_result(summ, "strategy_summary")
 
-p1 <- ggplot(trace, aes(x = t, y = loss)) +
-  geom_line() +
-  labs(title = "Online loss trajectory", x = "t", y = "Log loss")
+# paired differences against static best and against FCAE (per replicate pairing)
+B <- params$simulation$bootstrap_resamples
+paired <- function(ref) {
+  rbindlist(lapply(setdiff(policies_all, ref), function(pol) {
+    rbindlist(lapply(c("cum_regret_fixed", "cum_regret_oracle", "mean_reward", "mean_cost", "fnr", "auroc", "brier", "tpr_gap_age", "tpr_gap_sex"), function(mc) {
+      a <- metrics[policy == pol][order(rep)][[mc]]; b <- metrics[policy == ref][order(rep)][[mc]]
+      d <- a - b; ci <- boot_mean_ci(d, B = B, seed = 7)
+      rel <- if (mean(b) != 0) 100 * mean(d) / mean(b) else NA_real_
+      data.table(reference = ref, policy = pol, metric = mc, mean_policy = mean(a), mean_reference = mean(b),
+                 diff_mean = ci[["mean"]], diff_lo = ci[["lo"]], diff_hi = ci[["hi"]], relative_pct = rel,
+                 share_lower = mean(d < 0))
+    }))
+  }))
+}
+pd <- rbind(paired("static_best"), paired("fcae"))
+save_result(pd, "paired_differences")
 
-save_fig(p1, 4, "BanditLossTrajectory")
+# regret curves aggregated across replicates
+agg_curves <- curves[, .(cum_regret_fixed_mean = mean(cum_regret_fixed), cum_regret_fixed_lo = quantile(cum_regret_fixed, 0.025),
+                         cum_regret_fixed_hi = quantile(cum_regret_fixed, 0.975),
+                         cum_regret_oracle_mean = mean(cum_regret_oracle), cum_cost_mean = mean(cum_cost)), by = .(policy, t)]
+agg_curves[, policy_label := policy_label[policy]]
+save_result(agg_curves, "regret_curves")
 
-msg("04_run_bandit_simulation.R done")
+agg_dec <- deciles[, .(explore_share_mean = mean(explore_share, na.rm = TRUE), explore_share_lo = quantile(explore_share, 0.025, na.rm = TRUE),
+                       explore_share_hi = quantile(explore_share, 0.975, na.rm = TRUE)), by = .(policy, decile)]
+save_result(agg_dec, "exploration_deciles")
+if (!is.null(trace1)) { trace1[, arm_key := arms$arm[arm]]; save_result(trace1, "fcae_trace_rep1") }
+# elimination share per policy over replicates, for the sensitivity sets
+sens_l_elim <- NULL
+
+elim <- metrics[policy %in% c("fcae", "fcae_eb"), lapply(.SD, function(x) c(eliminated_share = mean(!is.na(x)), median_step = median(x, na.rm = TRUE),
+                                                             p2.5_step = quantile(x, 0.025, na.rm = TRUE), p97.5_step = quantile(x, 0.975, na.rm = TRUE))),
+                .SDcols = paste0("elim_step_arm", seq_len(K)), by = policy]
+elim <- cbind(elim[, .(policy)], statistic = rep(c("eliminated_share", "median_step", "p2.5_step", "p97.5_step"), length.out = nrow(elim)),
+              elim[, paste0("elim_step_arm", seq_len(K)), with = FALSE])
+setnames(elim, paste0("elim_step_arm", seq_len(K)), paste0("arm_", arms$arm))
+surv <- metrics[policy == "fcae", .N, by = best_fixed_arm]
+
+# implied sample complexity from the observed gaps on the stream (full information)
+R0 <- reward_matrix(P, y, thr, cost, lc, ls)
+mu <- colMeans(R0); v <- apply(R0, 2, var); best0 <- which.max(mu)
+isc <- rbindlist(lapply(seq_len(K), function(a) {
+  gap <- mu[best0] - mu[a]
+  n_h <- implied_sample_size(gap, v[a], v[best0], K, delta, "hoeffding")
+  n_b <- implied_sample_size(gap, v[a], v[best0], K, delta, "bernstein")
+  data.table(arm = arms$arm[a], mean_reward = mu[a], sd_reward = sqrt(v[a]), gap_to_best = gap,
+             gap_in_sd_units = gap / sqrt(v[a]),
+             n_per_arm_hoeffding = n_h, n_per_arm_bernstein = n_b,
+             decisions_round_robin_hoeffding = K * n_h, decisions_round_robin_bernstein = K * n_b,
+             stream_length = T)
+}))
+save_result(isc, "implied_sample_complexity")
+save_result(elim, "elimination_summary")
+save_result(surv, "best_fixed_arm_by_replicate")
+
+# -----------------------------------------------------------------------------
+# 2) Sensitivity analyses (fewer replicates)
+# -----------------------------------------------------------------------------
+Rs <- params$simulation$sensitivity_replicates
+sens_pols <- c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1", "random", "static_best", "ensemble", "heuristic")
+summarise_scenario <- function(mlist, label_cols) {
+  m <- rbindlist(mlist)
+  m[, c("cum_regret_fixed", "mean_reward", "mean_cost", "fnr", "auroc") := lapply(.SD, as.numeric), .SDcols = c("cum_regret_fixed", "mean_reward", "mean_cost", "fnr", "auroc")]
+  elim_cols <- paste0("elim_step_arm", seq_len(K))
+  out <- m[, c(list(replicates = .N, best_fixed_arm = names(which.max(table(best_fixed_arm))), static_best_arm = names(which.max(table(static_best_arm))),
+               cum_regret_fixed_mean = mean(cum_regret_fixed), cum_regret_fixed_lo = quantile(cum_regret_fixed, 0.025), cum_regret_fixed_hi = quantile(cum_regret_fixed, 0.975),
+               mean_reward_mean = mean(mean_reward), mean_cost_mean = mean(mean_cost), fnr_mean = mean(fnr), auroc_mean = mean(auroc),
+               explore_first_decile_mean = mean(explore_first_decile, na.rm = TRUE), explore_last_decile_mean = mean(explore_last_decile, na.rm = TRUE)),
+          lapply(.SD, function(x) mean(!is.na(as.numeric(x))))),
+    by = c(label_cols, "policy"), .SDcols = elim_cols]
+  setnames(out, elim_cols, paste0("eliminated_share_arm_", arms$arm))
+  out
+}
+
+msg("Sensitivity: reward weights grid")
+sens_l <- list()
+for (lcg in params$simulation$lambda_cost_grid) for (lsg in params$simulation$lambda_safety_grid) {
+  ml <- par_lapply(seq_len(Rs), function(r) { x <- run_replicate(r, sens_pols, lcg, lsg, delta, dmin, dmax)$metrics; x[, `:=`(lambda_cost = lcg, lambda_safety = lsg)]; x })
+  sens_l[[length(sens_l) + 1]] <- summarise_scenario(ml, c("lambda_cost", "lambda_safety"))
+}
+save_result(rbindlist(sens_l), "sensitivity_lambda")
+
+msg("Sensitivity: confidence level grid")
+sens_d <- list()
+for (dg in params$simulation$delta_grid) {
+  ml <- par_lapply(seq_len(Rs), function(r) { x <- run_replicate(r, c("fcae", "fcae_eb", "fcae_strat"), lc, ls, dg, dmin, dmax)$metrics; x[, delta := dg]; x })
+  sens_d[[length(sens_d) + 1]] <- summarise_scenario(ml, "delta")
+}
+save_result(rbindlist(sens_d), "sensitivity_delta")
+
+msg("Sensitivity: delay scenarios")
+sens_y <- list()
+for (sc in params$simulation$delay_scenarios) {
+  ml <- par_lapply(seq_len(Rs), function(r) { x <- run_replicate(r, c("fcae", "fcae_eb", "fcae_strat", "thompson", "ucb1", "random", "static_best"), lc, ls, delta, sc$min_hours, sc$max_hours)$metrics; x[, delay_scenario := sc$label]; x })
+  sens_y[[length(sens_y) + 1]] <- summarise_scenario(ml, "delay_scenario")
+}
+save_result(rbindlist(sens_y), "sensitivity_delay")
+
+# -----------------------------------------------------------------------------
+# 3) Extended horizon: stream resampled with replacement to test whether elimination
+#    occurs at the sample sizes implied by the observed gaps (a planning check, not a result
+#    about new patients)
+# -----------------------------------------------------------------------------
+Te <- params$simulation$extended_horizon$T; Re <- params$simulation$extended_horizon$replicates
+msg("Extended horizon: T=%d resampled decisions, %d replicates", Te, Re)
+ext_pols <- c("fcae", "fcae_eb", "thompson", "ucb1", "random", "static_best")
+run_extended <- function(rep) {
+  set.seed(params$reproducibility$seed_simulation + 100000 + rep)
+  idx <- sample.int(T, Te, replace = TRUE)
+  Pr <- P[idx, , drop = FALSE]; yr <- y[idx]; ctx_r <- ctx[idx]; st_r <- stratum_all[idx]
+  R <- reward_matrix(Pr, yr, thr, cost, lc, ls)
+  best_fixed <- which.max(colSums(R))
+  extra <- make_extra(Pr, yr, thr, cost, lc, ls, thr_ens, arm_low = 1L, arm_high = K)
+  sched <- make_schedule(Te, arrival_rate, dmin, dmax)
+  rbindlist(lapply(ext_pols, function(pol) {
+    res <- run_policy(pol, R, Pr, yr, thr, cost, sched, delta = delta, stratum = st_r, extra = extra,
+                      static_arm = static_index(pol, static_best), trace_every = 1e9, check_leakage = TRUE)
+    m <- run_metrics(res, R, yr, ctx_r, best_fixed, thin = Te)
+    data.table(rep = rep, policy = pol, best_fixed_arm = arms$arm[best_fixed], t(m$scalar))
+  }))
+}
+ext <- rbindlist(par_lapply(seq_len(Re), run_extended))
+ext_summary <- ext[, c(list(replicates = .N,
+                            cum_regret_fixed_mean = mean(cum_regret_fixed), cum_regret_fixed_lo = quantile(cum_regret_fixed, 0.025),
+                            cum_regret_fixed_hi = quantile(cum_regret_fixed, 0.975), mean_reward_mean = mean(mean_reward),
+                            mean_cost_mean = mean(mean_cost), fnr_mean = mean(fnr)),
+                       lapply(.SD, function(x) mean(!is.na(x))),
+                       setNames(lapply(.SD, function(x) median(x, na.rm = TRUE)), paste0("median_", paste0("elim_step_arm", seq_len(K))))),
+                 by = policy, .SDcols = paste0("elim_step_arm", seq_len(K))]
+setnames(ext_summary, paste0("elim_step_arm", seq_len(K)), paste0("eliminated_share_arm_", arms$arm))
+setnames(ext_summary, paste0("median_elim_step_arm", seq_len(K)), paste0("median_elimination_step_arm_", arms$arm))
+ext_summary[, T := Te]
+save_result(ext, "extended_horizon_replicates")
+save_result(ext_summary, "extended_horizon_summary")
+
+write_json_result(list(T = T, events = sum(y), K = K, arms = arms$arm, static_best_arm = arms$arm[static_best],
+                       replicates = Rn, sensitivity_replicates = Rs, lambda_cost = lc, lambda_safety = ls, delta = delta,
+                       delay_hours = c(dmin, dmax), arrival_rate_per_hour = arrival_rate,
+                       elapsed_min = as.numeric(difftime(Sys.time(), t_start, units = "mins"))), "simulation_meta")
+msg("04_run_bandit_simulation.R done (%.1f min)", as.numeric(difftime(Sys.time(), t_start, units = "mins")))

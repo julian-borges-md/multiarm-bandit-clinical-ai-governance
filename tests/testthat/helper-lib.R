@@ -1,0 +1,5 @@
+# Loads the pure library functions for the tests (no configuration, no data access)
+repo_root <- normalizePath(file.path(testthat::test_path(), "..", ".."), mustWork = TRUE)
+source(file.path(repo_root, "analysis", "R", "lib", "metrics.R"))
+source(file.path(repo_root, "analysis", "R", "lib", "policies.R"))
+source(file.path(repo_root, "analysis", "R", "lib", "synthetic.R"))

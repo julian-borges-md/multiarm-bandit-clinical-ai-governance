@@ -1,3 +1,8 @@
-paths:
-  mimic_iv_root: "/path/to/mimic-iv"
-  outputs_root: "outputs"
+# Copy to config/paths.yml (ignored by git) and set the local MIMIC-IV v3.1 root.
+# The root must contain hosp/ and icu/ with the PhysioNet csv.gz files.
+mimic_iv_dir: "/absolute/path/to/mimic-iv-3.1"
+# Optional: where outputs are written (default: <repo>/outputs)
+output_dir: null
+# Optional: DuckDB resources
+duckdb_threads: 8
+duckdb_memory_limit: "12GB"

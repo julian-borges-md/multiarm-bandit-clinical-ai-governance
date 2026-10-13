@@ -1,28 +1,48 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it using the metadata below."
-title: "Multi Arm Bandit Governance for Clinical AI"
+message: "If you use this software, cite it through the Zenodo concept DOI below, which resolves to the latest version."
+title: "Multi armed bandit governance for clinical AI deployment: adaptive model selection under delayed feedback"
 type: software
+version: "2.0.0"
+date-released: "2026-10-13"
+license: Apache-2.0
+doi: 10.5281/zenodo.18248285
+repository-code: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
+url: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
 authors:
   - family-names: "Borges"
     given-names: "Julian"
-    name-suffix: "MD, MS"
-repository-code: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
-url: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
-license: "Apache-2.0"
+    orcid: "https://orcid.org/0009-0001-9929-3135"
+    affiliation: "Department of Computer Science, Boston University Metropolitan College"
 keywords:
-  - "clinical AI"
+  - "clinical artificial intelligence"
   - "AI governance"
   - "multi-armed bandits"
-  - "deployment governance"
-  - "decision safety"
+  - "best arm identification"
+  - "delayed feedback"
+  - "deployment safety"
   - "MIMIC-IV"
   - "simulation study"
-preferred-citation:
-  type: software
-  authors:
-    - family-names: "Borges"
-      given-names: "Julian"
-      name-suffix: "MD, MS"
-  title: "Multi Arm Bandit Governance for Clinical AI"
-  year: 2026
-  url: "https://github.com/julian-borges-md/multiarm-bandit-clinical-ai-governance"
+references:
+  - type: data
+    title: "MIMIC-IV (version 3.1)"
+    authors:
+      - family-names: "Johnson"
+        given-names: "Alistair"
+      - family-names: "Bulgarelli"
+        given-names: "Lucas"
+      - family-names: "Pollard"
+        given-names: "Tom"
+      - family-names: "Gow"
+        given-names: "Brian"
+      - family-names: "Moody"
+        given-names: "Benjamin"
+      - family-names: "Horng"
+        given-names: "Steven"
+      - family-names: "Celi"
+        given-names: "Leo Anthony"
+      - family-names: "Mark"
+        given-names: "Roger"
+    year: 2024
+    doi: 10.13026/kpb9-mt58
+    publisher:
+      name: "PhysioNet"

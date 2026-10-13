@@ -1,0 +1,38 @@
+name: synthetic-pipeline-and-tests
+on:
+  push:
+    branches: [main, v2]
+    tags: ["v*"]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.5"
+          use-public-rspm: true
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
+      - name: Install R packages
+        run: Rscript -e 'install.packages(c("data.table","yaml","jsonlite","digest","glmnet","xgboost","ranger","pROC","ggplot2","scales","testthat","DBI","duckdb"))'
+      - name: Unit tests
+        run: Rscript tests/run_tests.R
+      - name: Synthetic end to end run
+        env:
+          DATA_MODE: synthetic
+        run: Rscript analysis/R/00_run_all.R
+      - name: Check expected outputs
+        run: |
+          test -f outputs/results/strategy_summary.csv
+          test -f outputs/results/run_manifest.json
+          test -f outputs/tables/Table05_strategy_summary.csv
+          test -f outputs/figures/Figure02_CumulativeRegret.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-outputs
+          path: |
+            outputs/tables
+            outputs/results
+            outputs/figures

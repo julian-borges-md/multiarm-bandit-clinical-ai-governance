@@ -1,242 +1,166 @@
 # analysis/R/01_build_cohort.R
-# cohort build using MIMIC-IV v3.1 hosp + icu tables
-# Produces cohort index files, cohort flow table, cohort summary table, and 2 figures
-# All outputs are saved under cfg$output_dir (absolute path enforced in 00_setup.R)
+# Cohort construction from MIMIC-IV v3.1 (hosp.patients, hosp.admissions, icu.icustays)
+# and assignment of the development (training, validation) and deployment stream sets.
+#
+# Outputs (outputs/):
+#   data/cohort_index_full.csv.gz      every eligible index ICU stay (patient level, not committed)
+#   data/cohort_index_selected.csv.gz  stays used downstream with their split label
+#   tables/Table01_cohort_flow.csv     inclusion and exclusion counts
+#   tables/Table02_cohort_characteristics.csv  by split
+#   figures/Figure01_CohortFlow.*
+#   results/stream_meta.json           arrival rate and split sizes
 
-msg("01_build_cohort.R starting (real MIMIC-IV v3.1)")
+if (!exists("cfg", inherits = TRUE)) source(file.path("analysis", "R", "00_setup.R"))
+suppressPackageStartupMessages({ library(data.table); library(ggplot2); library(scales) })
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "synthetic.R"))
 
-set.seed(cfg$seed)
+msg("01_build_cohort.R starting (mode=%s)", cfg$data_mode)
 
-# -----------------------------
-# 1) Paths
-# -----------------------------
-mimic_dir <- normalizePath(
-  "/Users/FxMED/Documents/rSTUDIO/machine learning/Users/FxMED/Downloads/multiarm-bandit-clinical-ai-governance/data/mimic-iv-3.1",
-  mustWork = TRUE
-)
+# -----------------------------------------------------------------------------
+# Synthetic mode: write features directly and stop
+# -----------------------------------------------------------------------------
+if (identical(cfg$data_mode, "synthetic")) {
+  feats <- synthetic_features(params$synthetic$n_development, params$synthetic$n_stream,
+                              seed = params$reproducibility$seed_synthetic,
+                              validation_fraction = params$cohort$validation_fraction)
+  save_data(feats[, .(subject_id, hadm_id, stay_id, split, age, sex, anchor_year_group, mort_hosp, icu_los_hours)],
+            "cohort_index_selected")
+  save_data(feats, "features")
+  flow <- data.table(step = c("Synthetic stays generated", "Development", "Deployment stream"),
+                     n_remaining = c(nrow(feats), sum(feats$split != "stream"), sum(feats$split == "stream")),
+                     n_excluded = 0L)
+  save_table(flow, 1, "cohort_flow")
+  write_json_result(list(mode = "synthetic", arrival_rate_per_hour = 0.65,
+                         n_train = sum(feats$split == "train"), n_val = sum(feats$split == "val"),
+                         n_stream = sum(feats$split == "stream")), "stream_meta")
+  msg("01_build_cohort.R done (synthetic)")
+} else {
 
-hosp_dir <- file.path(mimic_dir, "hosp")
-icu_dir  <- file.path(mimic_dir, "icu")
+cfg_validate_mimic(mustWork = TRUE)
+set.seed(params$reproducibility$seed_split)
 
-patients_path   <- file.path(hosp_dir, "patients.csv.gz")
-admissions_path <- file.path(hosp_dir, "admissions.csv.gz")
-icustays_path   <- file.path(icu_dir,  "icustays.csv.gz")
-
-if (!file.exists(patients_path)) stop(paste("Missing:", patients_path))
-if (!file.exists(admissions_path)) stop(paste("Missing:", admissions_path))
-if (!file.exists(icustays_path)) stop(paste("Missing:", icustays_path))
-
-msg(paste0("MIMIC-IV root: ", mimic_dir))
-msg(paste0("Outputs root: ", cfg$output_dir))
-
-# -----------------------------
-# 2) Read core tables (minimal columns only)
-# -----------------------------
+# -----------------------------------------------------------------------------
+# 1) Core tables
+# -----------------------------------------------------------------------------
 msg("Reading patients, admissions, icustays")
+patients <- fread(mimic_file("hosp", "patients.csv.gz"),
+                  select = c("subject_id", "gender", "anchor_age", "anchor_year", "anchor_year_group", "dod"), showProgress = FALSE)
+admissions <- fread(mimic_file("hosp", "admissions.csv.gz"),
+                    select = c("subject_id", "hadm_id", "admittime", "dischtime", "deathtime", "hospital_expire_flag"), showProgress = FALSE)
+icustays <- fread(mimic_file("icu", "icustays.csv.gz"),
+                  select = c("subject_id", "hadm_id", "stay_id", "intime", "outtime"), showProgress = FALSE)
 
-patients <- data.table::fread(
-  patients_path,
-  select = c("subject_id", "gender", "anchor_age", "anchor_year", "anchor_year_group", "dod"),
-  showProgress = FALSE
-)
+for (cc in c("admittime", "dischtime", "deathtime")) admissions[, (cc) := as.POSIXct(get(cc), tz = "UTC")]
+for (cc in c("intime", "outtime")) icustays[, (cc) := as.POSIXct(get(cc), tz = "UTC")]
 
-admissions <- data.table::fread(
-  admissions_path,
-  select = c("subject_id", "hadm_id", "admittime", "dischtime", "deathtime", "hospital_expire_flag"),
-  showProgress = FALSE
-)
-
-icustays <- data.table::fread(
-  icustays_path,
-  select = c("subject_id", "hadm_id", "stay_id", "intime", "outtime"),
-  showProgress = FALSE
-)
-
-# -----------------------------
-# 3) Standardize time columns
-# -----------------------------
-msg("Parsing timestamps")
-
-time_cols_adm <- c("admittime", "dischtime", "deathtime")
-for (cc in time_cols_adm) admissions[, (cc) := as.POSIXct(get(cc), tz = "UTC")]
-
-time_cols_icu <- c("intime", "outtime")
-for (cc in time_cols_icu) icustays[, (cc) := as.POSIXct(get(cc), tz = "UTC")]
-
-patients[, dod := as.POSIXct(dod, tz = "UTC")]
-
-# -----------------------------
-# 4) Derive age at admission (MIMIC anchor age logic)
-# -----------------------------
-msg("Deriving age at admission from anchor fields")
-
-get_anchor_year_from_group <- function(x) {
-  # expected format: "2011 - 2013"
-  out <- suppressWarnings(as.integer(substr(x, 1, 4)))
-  out
-}
-
-patients[, anchor_year_from_group := get_anchor_year_from_group(anchor_year_group)]
-patients[, anchor_year_final := data.table::fifelse(!is.na(anchor_year), anchor_year, anchor_year_from_group)]
-
-adm <- merge(
-  admissions,
-  patients[, .(subject_id, gender, anchor_age, anchor_year_final)],
-  by = "subject_id",
-  all.x = TRUE
-)
-
+# -----------------------------------------------------------------------------
+# 2) Age at admission (anchor logic) and sex
+# -----------------------------------------------------------------------------
+adm <- merge(admissions, patients[, .(subject_id, gender, anchor_age, anchor_year, anchor_year_group)], by = "subject_id", all.x = TRUE)
 adm[, admit_year := as.integer(format(admittime, "%Y"))]
-adm[, age_at_admit := anchor_age + (admit_year - anchor_year_final)]
+adm[, age_at_admit := anchor_age + (admit_year - anchor_year)]
+adm[, sex := fifelse(gender %chin% c("M", "F"), gender, NA_character_)]
 
-# Sex label consistent with manuscript
-adm[, sex := data.table::fifelse(gender %chin% c("M", "F"), gender, NA_character_)]
-
-# -----------------------------
-# 5) Join ICU stays to admissions
-# -----------------------------
-msg("Joining ICU stays with admissions")
-
-cohort0 <- merge(
-  icustays,
-  adm[, .(subject_id, hadm_id, admittime, dischtime, deathtime, hospital_expire_flag, age_at_admit, sex)],
-  by = c("subject_id", "hadm_id"),
-  all.x = TRUE
-)
-
-# Derived lengths
+# -----------------------------------------------------------------------------
+# 3) ICU stays joined to admissions
+# -----------------------------------------------------------------------------
+cohort0 <- merge(icustays,
+                 adm[, .(subject_id, hadm_id, admittime, dischtime, deathtime, hospital_expire_flag, age_at_admit, sex, anchor_year_group)],
+                 by = c("subject_id", "hadm_id"), all.x = TRUE)
 cohort0[, icu_los_hours := as.numeric(difftime(outtime, intime, units = "hours"))]
 cohort0[, hosp_los_days := as.numeric(difftime(dischtime, admittime, units = "days"))]
-
-# Hospital mortality
-# Primary: hospital_expire_flag; secondary: deathtime if provided
 cohort0[, mort_hosp := as.integer(hospital_expire_flag == 1L)]
-cohort0[, deathtime_final := deathtime]
-cohort0[mort_hosp == 0L & !is.na(deathtime_final), mort_hosp := 1L]
+cohort0[mort_hosp == 0L & !is.na(deathtime), mort_hosp := 1L]
 
-# -----------------------------
-# 6) Cohort flow tracking
-# -----------------------------
-flow <- data.table(step = character(), n_remaining = integer(), n_excluded = integer())
+# -----------------------------------------------------------------------------
+# 4) Inclusion and exclusion (flow tracked)
+# -----------------------------------------------------------------------------
+flow <- data.table(step = "ICU stays joined to admissions", n_remaining = nrow(cohort0), n_excluded = 0L)
+add_flow <- function(label, before, after) flow <<- rbind(flow, data.table(step = label, n_remaining = after, n_excluded = before - after))
 
-add_flow <- function(step_label, before_n, after_n) {
-  flow <<- rbind(flow, data.table(step = step_label, n_remaining = after_n, n_excluded = before_n - after_n))
-}
+b <- nrow(cohort0); cohort <- cohort0[!is.na(admittime) & !is.na(dischtime) & !is.na(intime) & !is.na(outtime) & !is.na(sex)]
+add_flow("Complete timestamps and sex", b, nrow(cohort))
 
-flow <- rbind(
-  flow,
-  data.table(step = "Start ICU stays (joined)", n_remaining = nrow(cohort0), n_excluded = 0L)
-)
+b <- nrow(cohort); cohort <- cohort[outtime > intime & dischtime >= admittime]
+add_flow("Valid time ordering", b, nrow(cohort))
 
-# -----------------------------
-# 7) Inclusion and exclusion criteria (aligned with manuscript)
-# -----------------------------
-msg("Applying inclusion and exclusion criteria")
+b <- nrow(cohort); cohort <- cohort[!is.na(age_at_admit) & age_at_admit >= params$cohort$age_min]
+add_flow(sprintf("Age %d or older", params$cohort$age_min), b, nrow(cohort))
 
-# A) Non missing timestamps
-before <- nrow(cohort0)
-cohort <- cohort0[!is.na(admittime) & !is.na(dischtime) & !is.na(intime) & !is.na(outtime)]
-add_flow("Non missing admission and ICU times", before, nrow(cohort))
+b <- nrow(cohort)
+cohort <- cohort[icu_los_hours >= params$cohort$icu_los_min_hours & icu_los_hours <= params$cohort$icu_los_max_days * 24]
+add_flow(sprintf("ICU length of stay %d h to %d d (feature window fully observed)", params$cohort$icu_los_min_hours, params$cohort$icu_los_max_days), b, nrow(cohort))
 
-# B) Valid ordering
-before <- nrow(cohort)
-cohort <- cohort[outtime > intime & dischtime >= admittime]
-add_flow("Valid time ordering", before, nrow(cohort))
+setorder(cohort, subject_id, hadm_id, intime, stay_id)
+b <- nrow(cohort); cohort <- cohort[, .SD[1], by = .(subject_id, hadm_id)]
+add_flow("Index ICU stay per hospital admission", b, nrow(cohort))
 
-# C) Adult only (>= 18)
-before <- nrow(cohort)
-cohort <- cohort[!is.na(age_at_admit) & age_at_admit >= 18]
-add_flow("Adult only (age >= 18)", before, nrow(cohort))
+b <- nrow(cohort); cohort <- cohort[!is.na(anchor_year_group)]
+add_flow("Anchor year group available", b, nrow(cohort))
 
-# D) Plausible ICU LOS: 1 hour to 60 days
-before <- nrow(cohort)
-cohort <- cohort[icu_los_hours >= 1 & icu_los_hours <= (60 * 24)]
-add_flow("ICU LOS within 1 hour and 60 days", before, nrow(cohort))
-
-# E) Index ICU stay per hospital admission (first ICU stay per hadm_id)
-data.table::setorder(cohort, subject_id, hadm_id, intime, stay_id)
-before <- nrow(cohort)
-cohort <- cohort[, .SD[1], by = .(subject_id, hadm_id)]
-add_flow("Index ICU stay per admission", before, nrow(cohort))
-
-# Deterministic sequential ordering for simulated deployment stream
-data.table::setorder(cohort, intime, stay_id)
-
-# -----------------------------
-# 8) Build cohort index full
-# -----------------------------
-msg("Building cohort_index_full")
-
-cohort_index_full <- cohort[, .(
-  subject_id, hadm_id, stay_id,
-  admittime, dischtime, intime, outtime,
-  age = as.integer(round(age_at_admit)),
-  sex,
-  mort_hosp,
-  deathtime = deathtime_final,
-  icu_los_hours,
-  hosp_los_days
-)]
-
+cohort_index_full <- cohort[, .(subject_id, hadm_id, stay_id, admittime, dischtime, intime, outtime,
+                                age = as.integer(round(age_at_admit)), sex, anchor_year_group, mort_hosp,
+                                icu_los_hours, hosp_los_days)]
 save_data(cohort_index_full, "cohort_index_full")
 
-# -----------------------------
-# 9) Evaluation cohort sampling (stratified by hospital mortality)
-# -----------------------------
-msg("Sampling evaluation cohort (stratified by mortality)")
+# -----------------------------------------------------------------------------
+# 5) Development and deployment split (subject level, temporal by anchor year group)
+# -----------------------------------------------------------------------------
+dev_groups <- params$cohort$development_year_groups
+dep_groups <- params$cohort$deployment_year_groups
+dev_pool <- cohort_index_full[anchor_year_group %chin% dev_groups]
+dep_pool <- cohort_index_full[anchor_year_group %chin% dep_groups]
+msg("Development pool: %d stays (%d subjects); deployment pool: %d stays (%d subjects)",
+    nrow(dev_pool), uniqueN(dev_pool$subject_id), nrow(dep_pool), uniqueN(dep_pool$subject_id))
 
-eval_n <- min(cfg$eval_n, nrow(cohort_index_full))
+# Subjects present in both pools (anchor_year_group is subject level, so this should be empty)
+overlap <- intersect(dev_pool$subject_id, dep_pool$subject_id)
+if (length(overlap) > 0) stop_log("Subject overlap between pools: %d", length(overlap))
 
-cohort_index_full[, mort_str := factor(mort_hosp)]
-eval_ids <- cohort_index_full[
-  ,
-  .SD[sample.int(.N, size = ceiling(eval_n * .N / nrow(cohort_index_full)), replace = FALSE)],
-  by = mort_str
-]
+# Sample development stays (one random stay is enough per subject to limit within subject correlation)
+dev_pool <- dev_pool[sample.int(.N)]
+dev_one <- dev_pool[, .SD[1], by = subject_id]
+dev_n <- min(params$cohort$development_n, nrow(dev_one))
+dev_sel <- dev_one[sample.int(.N, dev_n)]
+val_subjects <- sample(dev_sel$subject_id, size = round(params$cohort$validation_fraction * dev_n))
+dev_sel[, split := fifelse(subject_id %in% val_subjects, "val", "train")]
 
-eval_ids <- eval_ids[1:eval_n][, mort_str := NULL]
-data.table::setorder(eval_ids, intime, stay_id)
+dep_pool <- dep_pool[sample.int(.N)]
+dep_one <- dep_pool[, .SD[1], by = subject_id]
+stream_n <- min(params$cohort$stream_n, nrow(dep_one))
+stream_sel <- dep_one[sample.int(.N, stream_n)]
+stream_sel[, split := "stream"]
 
-save_data(eval_ids, "cohort_index_eval")
+selected <- rbind(dev_sel, stream_sel)
+stopifnot(length(intersect(selected[split != "stream", subject_id], selected[split == "stream", subject_id])) == 0)
+stopifnot(!anyDuplicated(selected$stay_id))
+save_data(selected, "cohort_index_selected")
 
-# -----------------------------
-# 10) Tables for manuscript
-# -----------------------------
-msg("Saving manuscript tables (flow and cohort summary)")
-
+flow <- rbind(flow, data.table(step = c("Development set sampled (train plus validation)", "Deployment stream sampled"),
+                               n_remaining = c(nrow(dev_sel), nrow(stream_sel)), n_excluded = NA_integer_))
 save_table(flow, 1, "cohort_flow")
 
-desc <- cohort_index_full[, .(
-  n = .N,
-  mort_rate = mean(mort_hosp, na.rm = TRUE),
-  age_mean = mean(age, na.rm = TRUE),
-  age_sd = sd(age, na.rm = TRUE),
-  icu_los_med_h = median(icu_los_hours, na.rm = TRUE),
-  icu_los_iqr_h = IQR(icu_los_hours, na.rm = TRUE),
-  hosp_los_med_d = median(hosp_los_days, na.rm = TRUE),
-  hosp_los_iqr_d = IQR(hosp_los_days, na.rm = TRUE)
-)]
+# -----------------------------------------------------------------------------
+# 6) Characteristics by split and arrival rate
+# -----------------------------------------------------------------------------
+chars <- selected[, .(n = .N, subjects = uniqueN(subject_id), mortality = mean(mort_hosp),
+                      age_mean = mean(age), age_sd = sd(age), female = mean(sex == "F"),
+                      icu_los_median_h = median(icu_los_hours), icu_los_iqr_h = IQR(icu_los_hours),
+                      hosp_los_median_d = median(hosp_los_days), hosp_los_iqr_d = IQR(hosp_los_days)),
+                  by = split][order(factor(split, levels = c("train", "val", "stream")))]
+save_table(chars, 2, "cohort_characteristics")
 
-save_table(desc, 2, "cohort_summary")
+span_hours <- 15 * 365.25 * 24                      # MIMIC-IV covers admissions from 2008 to 2022
+arrival_rate <- if (!is.null(params$delay$arrival_rate_per_hour)) params$delay$arrival_rate_per_hour else nrow(cohort_index_full) / span_hours
+write_json_result(list(mode = "mimic", arrival_rate_per_hour = arrival_rate, n_eligible = nrow(cohort_index_full),
+                       n_train = sum(selected$split == "train"), n_val = sum(selected$split == "val"),
+                       n_stream = sum(selected$split == "stream"),
+                       development_year_groups = dev_groups, deployment_year_groups = dep_groups), "stream_meta")
 
-# -----------------------------
-# 11) Figures for manuscript
-# -----------------------------
-msg("Saving manuscript figures (flow and age distribution)")
+p1 <- ggplot(flow[!is.na(n_excluded)], aes(x = factor(step, levels = rev(step)), y = n_remaining)) +
+  geom_col(fill = "grey35") + coord_flip() + scale_y_continuous(labels = comma) +
+  labs(x = NULL, y = "ICU stays remaining") + theme_minimal(base_size = 11)
+save_fig(p1, 1, "CohortFlow", width = 8, height = 4)
 
-p1 <- ggplot(flow, aes(x = reorder(step, n_remaining), y = n_remaining)) +
-  geom_col() +
-  coord_flip() +
-  scale_y_continuous(labels = scales::comma) +
-  labs(title = "Cohort flow", x = NULL, y = "Remaining ICU stays")
-
-save_fig(p1, 1, "CohortFlow")
-
-p2 <- ggplot(cohort_index_full, aes(x = age)) +
-  geom_histogram(bins = 40) +
-  labs(title = "Age distribution", x = "Age at admission", y = "Count")
-
-save_fig(p2, 2, "AgeDistribution")
-
-msg("01_build_cohort.R done (real MIMIC-IV v3.1)")
-
+msg("01_build_cohort.R done")
+}

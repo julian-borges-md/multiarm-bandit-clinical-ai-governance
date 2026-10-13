@@ -1,178 +1,180 @@
 # analysis/R/03_train_models.R
-# Train baseline predictive models on evaluation features
+# Train, calibrate and freeze the three decision arms on the development set,
+# then score the deployment stream. No stream observation is used for training,
+# tuning, calibration or threshold selection (asserted below).
+#
 # Outputs:
-#   outputs/models/model_glm.rds
-#   outputs/models/model_ranger.rds
-#   outputs/models/model_xgb.rds
-#   outputs/tables/Table04_model_performance.csv
-#   outputs/data/preds_eval.csv.gz
+#   models/arm_<key>.rds                   frozen models (not committed)
+#   data/stream_predictions.csv.gz         calibrated probabilities per arm for the stream (not committed)
+#   results/arms_meta.csv                  arm definitions, thresholds, calibration parameters, static best flag
+#   results/model_performance.csv          validation and stream performance per arm and for the ensemble
+#   tables/Table04_model_performance.csv
 
-suppressPackageStartupMessages({
-  library(data.table)
-  library(ranger)
-  library(xgboost)
-})
-
-# -----------------------------
-# 0) Load setup once
-# -----------------------------
-if (!exists("cfg", inherits = TRUE) || !is.list(cfg) || is.null(cfg$output_dir)) {
-  source("analysis/R/00_setup.R")
-}
+if (!exists("cfg", inherits = TRUE)) source(file.path("analysis", "R", "00_setup.R"))
+suppressPackageStartupMessages({ library(data.table); library(glmnet); library(xgboost); library(ranger); library(pROC) })
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "metrics.R"))
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "policies.R"))
+source(file.path(cfg$repo_root, "analysis", "R", "lib", "synthetic.R"))   # concept constants
 
 msg("03_train_models.R starting")
-set.seed(cfg$seed)
+set.seed(params$reproducibility$seed_models)
 
-# -----------------------------
-# 1) Inputs and outputs
-# -----------------------------
-features_gz <- file.path(cfg$out_data_dir, "features_eval.csv.gz")
-if (!file.exists(features_gz)) {
-  stop("Missing outputs/data/features_eval.csv.gz. Run 02_extract_features.R first.")
-}
+feats <- load_data("features")
+feats[, sex_M := as.numeric(sex == "M")]
+feats[, age_ge_65 := as.integer(age >= 65)]
+feats[, ext_lab_available := as.integer(rowSums(!is.na(feats[, paste0("lab_", EXT_LABS, "_mean"), with = FALSE])) > 0)]
+for (l in LAB_CONCEPTS) data.table::set(feats, j = paste0("miss_", l), value = as.numeric(is.na(feats[[paste0("lab_", l, "_mean")]])))
 
-models_dir <- file.path(cfg$output_dir, "models")
-dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
+train  <- feats[split == "train"]
+val    <- feats[split == "val"]
+stream <- feats[split == "stream"]
+stopifnot(nrow(train) > 0, nrow(val) > 0, nrow(stream) > 0)
+stopifnot(length(intersect(c(train$subject_id, val$subject_id), stream$subject_id)) == 0)
+stopifnot(length(intersect(c(train$stay_id, val$stay_id), stream$stay_id)) == 0)
 
-# If gz, decompress to cache for fread stability
-features_csv <- ensure_unzipped(features_gz, cache_dir = cfg$out_cache_dir)
+# validation halves: early stopping (es) and calibration, thresholds and reporting (cal)
+val_subj <- unique(val$subject_id)
+es_subj <- sample(val_subj, size = floor(length(val_subj) / 2))
+val_es  <- val[subject_id %in% es_subj]
+val_cal <- val[!subject_id %in% es_subj]
 
-# IMPORTANT: always use file= for paths (paths may contain spaces)
-dt <- data.table::fread(file = features_csv, showProgress = FALSE)
-
-# -----------------------------
-# 2) Minimal cleaning / prep
-# -----------------------------
-# Outcome must exist
-if (!("mort_hosp" %in% names(dt))) stop("features_eval is missing mort_hosp outcome.")
-dt[, mort_hosp := as.integer(mort_hosp)]
-
-# Ensure id columns exist
-id_cols <- intersect(c("subject_id", "hadm_id", "stay_id"), names(dt))
-
-# Convert sex to factor if present
-if ("sex" %in% names(dt)) {
-  dt[, sex := as.factor(sex)]
-}
-
-# Define feature columns
-drop_cols <- unique(c(id_cols, "mort_hosp"))
-x_cols <- setdiff(names(dt), drop_cols)
-
-# Basic numeric imputation for NA (median), and one hot encode factor columns
-# Split feature columns into numeric and factor
-is_fac <- vapply(dt[, ..x_cols], is.factor, logical(1))
-fac_cols <- x_cols[is_fac]
-num_cols <- x_cols[!is_fac]
-
-# Median impute numeric
-for (cc in num_cols) {
-  v <- dt[[cc]]
-  if (all(is.na(v))) {
-    dt[[cc]] <- 0
-  } else {
-    med <- suppressWarnings(stats::median(v, na.rm = TRUE))
-    v[is.na(v)] <- med
-    dt[[cc]] <- v
-  }
-}
-
-# One hot encode factors (including sex)
-if (length(fac_cols) > 0) {
-  # model.matrix will create dummy vars; keep stable ordering
-  mm <- stats::model.matrix(~ . - 1, data = dt[, ..fac_cols])
-  mm <- as.matrix(mm)
-  
-  # Remove original factor cols from dt, append dummies
-  dt[, (fac_cols) := NULL]
-  dt <- cbind(dt, as.data.table(mm))
-  x_cols <- setdiff(names(dt), drop_cols)
-}
-
-# Final design matrix and label vector
-X <- as.matrix(dt[, ..x_cols])
-y <- dt[["mort_hosp"]]
-
-# -----------------------------
-# 3) Train models
-# -----------------------------
-
-# 3.1 GLM logistic regression
-glm_df <- data.frame(mort_hosp = y, X)
-m_glm <- stats::glm(mort_hosp ~ ., data = glm_df, family = stats::binomial())
-
-# 3.2 Random forest (ranger)
-rf_df <- data.frame(mort_hosp = as.factor(y), X)
-m_rf <- ranger::ranger(
-  mort_hosp ~ .,
-  data = rf_df,
-  probability = TRUE,
-  num.trees = 500,
-  seed = cfg$seed
+# -----------------------------------------------------------------------------
+# 1) Feature sets and preprocessing (training medians only)
+# -----------------------------------------------------------------------------
+vital_cols <- paste0("vital_", rep(VITAL_CONCEPTS, each = 4), "_", STATS)
+core_cols  <- paste0("lab_", rep(CORE_LABS, each = 4), "_", STATS)
+ext_cols   <- paste0("lab_", rep(EXT_LABS, each = 4), "_", STATS)
+feature_sets <- list(
+  vitals    = c("age", "sex_M", vital_cols),
+  core_labs = c("age", "sex_M", vital_cols, core_cols, paste0("miss_", CORE_LABS)),
+  all       = c("age", "sex_M", vital_cols, core_cols, ext_cols, paste0("miss_", LAB_CONCEPTS))
 )
+all_num <- unique(unlist(feature_sets))
+medians <- vapply(all_num, function(cc) { v <- train[[cc]]; m <- stats::median(v, na.rm = TRUE); if (is.na(m)) 0 else m }, numeric(1))
 
-# 3.3 XGBoost (future proof: put objective and eval_metric inside params)
-dtrain <- xgboost::xgb.DMatrix(data = X, label = y)
-
-xgb_params <- list(
-  booster = "gbtree",
-  objective = "binary:logistic",
-  eval_metric = "logloss"
-)
-
-m_xgb <- xgboost::xgb.train(
-  params  = xgb_params,
-  data    = dtrain,
-  nrounds = 300,
-  verbose = 0
-)
-
-# -----------------------------
-# 4) Predictions and metrics
-# -----------------------------
-pred_glm <- as.numeric(stats::predict(m_glm, newdata = glm_df, type = "response"))
-pred_rf  <- as.numeric(predict(m_rf, data = rf_df)$predictions[, "1"])
-pred_xgb <- as.numeric(predict(m_xgb, newdata = dtrain))
-
-# AUC helper (no extra packages)
-auc_fast <- function(y_true, y_score) {
-  o <- order(y_score)
-  y <- y_true[o]
-  n1 <- sum(y == 1)
-  n0 <- sum(y == 0)
-  if (n1 == 0 || n0 == 0) return(NA_real_)
-  r <- rank(y_score[o], ties.method = "average")
-  (sum(r[y == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+design <- function(dt, cols) {
+  X <- as.matrix(dt[, cols, with = FALSE])
+  for (j in seq_along(cols)) { v <- X[, j]; v[is.na(v)] <- medians[[cols[j]]]; X[, j] <- v }
+  X
 }
 
-perf <- data.table(
-  model = c("glm_logistic", "ranger_rf", "xgboost"),
-  auc = c(
-    auc_fast(y, pred_glm),
-    auc_fast(y, pred_rf),
-    auc_fast(y, pred_xgb)
-  )
-)
+# -----------------------------------------------------------------------------
+# 2) Learners
+# -----------------------------------------------------------------------------
+fit_arm <- function(learner, Xtr, ytr, Xes, yes) {
+  if (learner == "glmnet_ridge") {
+    cv <- glmnet::cv.glmnet(Xtr, ytr, family = "binomial", alpha = 0, nfolds = 10, standardize = TRUE)
+    list(model = cv, predict = function(m, X) as.numeric(stats::predict(m, newx = X, s = "lambda.min", type = "response")),
+         detail = sprintf("ridge lambda.min=%.4g", cv$lambda.min))
+  } else if (learner == "xgboost") {
+    dtr <- xgboost::xgb.DMatrix(Xtr, label = ytr); des <- xgboost::xgb.DMatrix(Xes, label = yes)
+    prm <- list(objective = "binary:logistic", eval_metric = "logloss", eta = 0.05, max_depth = 4,
+                subsample = 0.8, colsample_bytree = 0.8, min_child_weight = 5, nthread = 4)
+    m0 <- xgboost::xgb.train(params = prm, data = dtr, nrounds = 2000, evals = list(es = des),
+                             early_stopping_rounds = 50, verbose = 0)
+    best <- suppressWarnings(as.integer(xgboost::xgb.attributes(m0)$best_iteration))
+    if (length(best) == 0 || is.na(best) || best < 1) best <- 2000L
+    # refit with the selected number of rounds so that the frozen model is unambiguous
+    m <- xgboost::xgb.train(params = prm, data = dtr, nrounds = best, verbose = 0)
+    list(model = m, predict = function(m, X) as.numeric(stats::predict(m, xgboost::xgb.DMatrix(X))),
+         detail = sprintf("xgboost nrounds=%d (early stopping on validation half)", best))
+  } else if (learner == "ranger") {
+    df <- data.frame(y = factor(ytr, levels = c(0, 1)), Xtr)
+    m <- ranger::ranger(y ~ ., data = df, probability = TRUE, num.trees = 500, min.node.size = 10,
+                        seed = params$reproducibility$seed_models, num.threads = 4)
+    list(model = m, predict = function(m, X) as.numeric(stats::predict(m, data = data.frame(X))$predictions[, "1"]),
+         detail = sprintf("ranger num.trees=500 mtry=%d", m$mtry))
+  } else stop("Unknown learner: ", learner)
+}
 
-# Save table
+arms <- arm_table()
+K <- nrow(arms)
+preds_cal <- matrix(NA_real_, nrow(val_cal), K); preds_str <- matrix(NA_real_, nrow(stream), K)
+colnames(preds_cal) <- colnames(preds_str) <- arms$arm
+platt <- data.table(arm = arms$arm, platt_intercept = NA_real_, platt_slope = NA_real_, detail = NA_character_, n_features = NA_integer_)
+
+for (k in seq_len(K)) {
+  a <- arms[k]
+  cols <- feature_sets[[a$feature_set]]
+  msg("Training arm %s (%s on %d features)", a$arm, a$learner, length(cols))
+  fit <- fit_arm(a$learner, design(train, cols), train$mort_hosp, design(val_es, cols), val_es$mort_hosp)
+  raw_cal <- fit$predict(fit$model, design(val_cal, cols))
+  raw_str <- fit$predict(fit$model, design(stream, cols))
+  # Platt scaling on the calibration half of the validation set
+  pl <- stats::glm(val_cal$mort_hosp ~ logit(raw_cal), family = stats::binomial())
+  cf <- stats::coef(pl)
+  preds_cal[, k] <- expit(cf[1] + cf[2] * logit(raw_cal))
+  preds_str[, k] <- expit(cf[1] + cf[2] * logit(raw_str))
+  platt[k, `:=`(platt_intercept = unname(cf[1]), platt_slope = unname(cf[2]), detail = fit$detail, n_features = length(cols))]
+  saveRDS(list(model = fit$model, learner = a$learner, cols = cols, medians = medians[cols], platt = cf),
+          file.path(cfg$dirs$models, sprintf("arm_%s.rds", a$arm)))
+}
+
+# -----------------------------------------------------------------------------
+# 3) Operating thresholds, ensemble threshold, static best arm (validation only)
+# -----------------------------------------------------------------------------
+target <- params$features$target_sensitivity
+thr <- vapply(seq_len(K), function(k) threshold_for_sensitivity(val_cal$mort_hosp, preds_cal[, k], target), numeric(1))
+p_ens_cal <- rowMeans(preds_cal)
+thr_ens <- threshold_for_sensitivity(val_cal$mort_hosp, p_ens_cal, target)
+lc <- params$reward$lambda_cost; ls <- params$reward$lambda_safety
+R_cal <- reward_matrix(preds_cal, val_cal$mort_hosp, thr, arms$cost, lc, ls)
+val_mean_reward <- colMeans(R_cal)
+static_best <- which.max(val_mean_reward)
+
+arms_meta <- cbind(arms, platt[, .(platt_intercept, platt_slope, detail, n_features)])
+arms_meta[, threshold := thr]
+arms_meta[, val_mean_reward := val_mean_reward]
+arms_meta[, static_best := seq_len(K) == static_best]
+arms_meta <- rbind(arms_meta,
+                   data.table(arm = "ensemble", label = "Equal weight average of the three arms", learner = "average", feature_set = "all",
+                              cost = max(arms$cost), platt_intercept = NA, platt_slope = NA, detail = NA, n_features = NA,
+                              threshold = thr_ens, val_mean_reward = mean(composite_reward(p_ens_cal, val_cal$mort_hosp, thr_ens, max(arms$cost), lc, ls)),
+                              static_best = FALSE))
+save_result(arms_meta, "arms_meta")
+
+# -----------------------------------------------------------------------------
+# 4) Performance on validation (calibration half) and on the deployment stream
+# -----------------------------------------------------------------------------
+perf_row <- function(set, model, y, p, thr_x, cost_x) {
+  roc <- tryCatch(pROC::roc(y, p, quiet = TRUE), error = function(e) NULL)
+  ci <- if (!is.null(roc)) as.numeric(pROC::ci.auc(roc, method = "delong")) else c(NA, NA, NA)
+  cl <- classification_at(y, p, thr_x); cal <- calibration_fit(y, p)
+  data.table(set = set, model = model, n = length(y), events = sum(y), auroc = ci[2], auroc_lo = ci[1], auroc_hi = ci[3],
+             auprc = auprc(y, p), brier = brier(y, p), cal_intercept = cal[["intercept"]], cal_slope = cal[["slope"]],
+             threshold = thr_x, sensitivity = cl[["sensitivity"]], specificity = cl[["specificity"]], ppv = cl[["ppv"]],
+             fnr = cl[["fnr"]], alert_rate = cl[["alert_rate"]], cost = cost_x)
+}
+perf <- rbindlist(c(
+  lapply(seq_len(K), function(k) perf_row("validation", arms$arm[k], val_cal$mort_hosp, preds_cal[, k], thr[k], arms$cost[k])),
+  list(perf_row("validation", "ensemble", val_cal$mort_hosp, p_ens_cal, thr_ens, max(arms$cost))),
+  lapply(seq_len(K), function(k) perf_row("stream", arms$arm[k], stream$mort_hosp, preds_str[, k], thr[k], arms$cost[k])),
+  list(perf_row("stream", "ensemble", stream$mort_hosp, rowMeans(preds_str), thr_ens, max(arms$cost)))
+))
+save_result(perf, "model_performance")
 save_table(perf, 4, "model_performance")
 
-# Save predictions
-preds <- data.table(
-  stay_id = if ("stay_id" %in% names(dt)) dt[["stay_id"]] else NA_integer_,
-  mort_hosp = y,
-  pred_glm = pred_glm,
-  pred_rf = pred_rf,
-  pred_xgb = pred_xgb
-)
-save_data(preds, "preds_eval")
+# per stratum stream performance (context dependence of the arms)
+strat_perf <- rbindlist(lapply(seq_len(K), function(k) {
+  stream[, .(model = arms$arm[k], n = .N, events = sum(mort_hosp),
+             auroc = auroc(mort_hosp, preds_str[.I, k]), brier = brier(mort_hosp, preds_str[.I, k]),
+             fnr = classification_at(mort_hosp, preds_str[.I, k], thr[k])[["fnr"]],
+             mean_reward = mean(composite_reward(preds_str[.I, k], mort_hosp, thr[k], arms$cost[k], lc, ls))),
+         by = .(ext_lab_available, age_ge_65)]
+}))
+save_result(strat_perf[order(model, ext_lab_available, age_ge_65)], "stream_performance_by_stratum")
 
-# -----------------------------
-# 5) Save models
-# -----------------------------
-saveRDS(m_glm, file.path(models_dir, "model_glm.rds"))
-saveRDS(m_rf,  file.path(models_dir, "model_ranger.rds"))
-saveRDS(m_xgb, file.path(models_dir, "model_xgb.rds"))
+# -----------------------------------------------------------------------------
+# 5) Validation (calibration half) and stream predictions for the simulation
+# -----------------------------------------------------------------------------
+vp <- data.table(stay_id = val_cal$stay_id, mort_hosp = val_cal$mort_hosp)
+for (k in seq_len(K)) data.table::set(vp, j = paste0("p_", arms$arm[k]), value = preds_cal[, k])
+save_data(vp, "validation_predictions")
 
-msg("Saved models to: %s", models_dir)
+sp <- data.table(stay_id = stream$stay_id, subject_id = stream$subject_id, mort_hosp = stream$mort_hosp,
+                 age = stream$age, age_ge_65 = stream$age_ge_65, sex = stream$sex,
+                 ext_lab_available = stream$ext_lab_available)
+for (k in seq_len(K)) data.table::set(sp, j = paste0("p_", arms$arm[k]), value = preds_str[, k])
+save_data(sp, "stream_predictions")
+msg("Static best arm on validation: %s (mean reward %.4f)", arms$arm[static_best], val_mean_reward[static_best])
 msg("03_train_models.R done")
