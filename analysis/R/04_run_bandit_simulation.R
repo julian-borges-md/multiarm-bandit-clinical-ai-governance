@@ -370,11 +370,16 @@ drift_desc <- rbindlist(lapply(params$simulation$drift_scenarios, function(ds) {
   i <- (floor(ds$start_fraction * T) + 1L):T
   Rd <- reward_matrix(Pd, y, thr, cost, lc, ls, utility_primary, lf_primary)
   mu <- colMeans(Rd[i, , drop = FALSE])
+  v <- apply(Rd[i, , drop = FALSE], 2, var); best_after <- which.max(mu); gap_a <- max(mu) - mu[a]
+  n_h <- implied_sample_size(gap_a, v[a], v[best_after], K, delta, "hoeffding")
+  n_b <- implied_sample_size(gap_a, v[a], v[best_after], K, delta, "bernstein")
   data.table(drift_scenario = ds$label, arm = ds$arm, logit_noise_sd = ds$logit_noise_sd, decisions_affected = length(i),
              auroc_before = auroc(y[i], P[i, a]), auroc_after = auroc(y[i], Pd[i, a]),
              brier_before = brier(y[i], P[i, a]), brier_after = brier(y[i], Pd[i, a]),
              sensitivity_before = mean(P[i, a][y[i] == 1] >= thr[a]), sensitivity_after = mean(Pd[i, a][y[i] == 1] >= thr[a]),
-             best_arm_after = arms$arm[which.max(mu)], gap_drifted_arm_after = max(mu) - mu[a])
+             best_arm_after = arms$arm[best_after], gap_drifted_arm_after = gap_a, sd_reward_drifted_arm = sqrt(v[a]),
+             n_per_arm_hoeffding = n_h, n_per_arm_bernstein = n_b, decisions_round_robin_bernstein = K * n_b,
+             outcomes_available_per_arm = floor(length(i) / K))
 }))
 save_result(drift_desc, "drift_scenario_description")
 
@@ -386,10 +391,11 @@ save_result(drift_desc, "drift_scenario_description")
 Te <- params$simulation$extended_horizon$T; Re <- params$simulation$extended_horizon$replicates
 msg("Extended horizon: T=%d resampled decisions, %d replicates", Te, Re)
 ext_pols <- c("fcae", "fcae_eb", "thompson", "thompson_gauss", "ucb1", "random", "static_best")
-run_extended <- function(rep) {
+run_extended <- function(rep, drift = NULL) {
   set.seed(params$reproducibility$seed_simulation + 100000 + rep)
   idx <- sample.int(T, Te, replace = TRUE)
   Pr <- P[idx, , drop = FALSE]; yr <- y[idx]; ctx_r <- ctx[idx]; st_r <- stratum_all[idx]
+  Pr <- apply_drift(Pr, drift, rep)
   R <- reward_matrix(Pr, yr, thr, cost, lc, ls, utility_primary, lf_primary)
   best_fixed <- which.max(colSums(R))
   extra <- make_extra(Pr, yr, thr, cost, lc, ls, thr_ens, arm_low = 1L, arm_high = K, utility = utility_primary, lambda_f = lf_primary)
@@ -398,17 +404,23 @@ run_extended <- function(rep) {
     res <- run_policy(pol, R, Pr, yr, thr, cost, sched, delta = delta, stratum = st_r, extra = extra,
                       static_arm = static_index(pol, static_best), trace_every = 1e9, check_leakage = TRUE)
     m <- run_metrics(res, R, yr, ctx_r, best_fixed, thin = Te, arm_gap = arm_gap)
-    data.table(rep = rep, policy = pol, best_fixed_arm = arms$arm[best_fixed], t(m$scalar))
+    data.table(scenario = if (is.null(drift)) "primary" else drift$label, rep = rep, policy = pol, best_fixed_arm = arms$arm[best_fixed], t(m$scalar))
   }))
 }
 ext <- rbindlist(par_lapply(seq_len(Re), run_extended))
-ext_summary <- ext[, c(list(replicates = .N,
+ext_drift_label <- params$simulation$extended_horizon$drift_scenario
+if (!is.null(ext_drift_label)) {
+  ds <- params$simulation$drift_scenarios[[match(ext_drift_label, vapply(params$simulation$drift_scenarios, `[[`, character(1), "label"))]]
+  msg("Extended horizon under drift scenario %s", ds$label)
+  ext <- rbind(ext, rbindlist(par_lapply(seq_len(Re), function(r) run_extended(r, drift = ds))))
+}
+ext_summary <- ext[, c(list(replicates = .N, best_fixed_arm = names(which.max(table(best_fixed_arm))),
                             cum_regret_fixed_mean = mean(cum_regret_fixed), cum_regret_fixed_lo = quantile(cum_regret_fixed, 0.025),
                             cum_regret_fixed_hi = quantile(cum_regret_fixed, 0.975), mean_reward_mean = mean(mean_reward),
                             mean_cost_mean = mean(mean_cost), fnr_mean = mean(fnr)),
                        lapply(.SD, function(x) mean(!is.na(x))),
                        setNames(lapply(.SD, function(x) median(x, na.rm = TRUE)), paste0("median_", paste0("elim_step_arm", seq_len(K))))),
-                 by = policy, .SDcols = paste0("elim_step_arm", seq_len(K))]
+                 by = .(scenario, policy), .SDcols = paste0("elim_step_arm", seq_len(K))]
 setnames(ext_summary, paste0("elim_step_arm", seq_len(K)), paste0("eliminated_share_arm_", arms$arm))
 setnames(ext_summary, paste0("median_elim_step_arm", seq_len(K)), paste0("median_elimination_step_arm_", arms$arm))
 ext_summary[, T := Te]

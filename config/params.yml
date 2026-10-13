@@ -92,6 +92,7 @@ simulation:
   extended_horizon:
     T: 30000          # stream resampled with replacement to test elimination beyond the available horizon
     replicates: 30
+    drift_scenario: "arm_A_severe_from_start"   # also run under this drift scenario (retirement of a broken model)
   delay_scenarios:
     - {label: "none", min_hours: 0, max_hours: 0}
     - {label: "primary", min_hours: 6, max_hours: 72}
