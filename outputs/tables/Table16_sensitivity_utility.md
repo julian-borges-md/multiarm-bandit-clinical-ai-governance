@@ -1,0 +1,22 @@
+# Table 16: sensitivity_utility
+
+| utility | policy | best_fixed_arm | static_best_arm | cum_regret_fixed | mean_reward | mean_cost | fnr | eliminated_share_arm_A | eliminated_share_arm_B | eliminated_share_arm_C |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| brier | fcae | A | A | 135.3 (128.7 to 143.2) | 0.9037 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| brier | fcae_eb | A | A | 135.3 (128.7 to 143.2) | 0.9037 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| brier | fcae_strat | A | A | 134.9 (126.9 to 145.7) | 0.9038 | 0.6160 | 0.1760 | 0 | 0 | 0 |
+| brier | thompson | A | A | 32.5 (6.7 to 91.1) | 0.9176 | 0.3410 | 0.1830 | 0 | 0 | 0 |
+| brier | ucb1 | A | A | 95.1 (84.8 to 104.5) | 0.9092 | 0.5100 | 0.1800 | 0 | 0 | 0 |
+| brier | random | A | A | 135.7 (128.0 to 143.4) | 0.9037 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| brier | static_best | A | A | 0.0 (0.0 to 0.0) | 0.9220 | 0.2500 | 0.1830 | 0 | 0 | 0 |
+| brier | ensemble | A | A | 292.3 (292.3 to 292.3) | 0.8825 | 1.000 | 0.1720 | 0 | 0 | 0 |
+| brier | heuristic | A | A | 143.0 (143.0 to 143.0) | 0.9027 | 0.5880 | 0.2620 | 0 | 0 | 0 |
+| accuracy | fcae | B | B | 119.0 (103.6 to 133.6) | 0.8187 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| accuracy | fcae_eb | B | B | 119.0 (103.6 to 133.6) | 0.8187 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| accuracy | fcae_strat | B | B | 119.9 (103.1 to 137.6) | 0.8186 | 0.6160 | 0.1760 | 0 | 0 | 0 |
+| accuracy | thompson | B | B | 42.4 (7.1 to 105.2) | 0.8291 | 0.5710 | 0.1790 | 0 | 0 | 0 |
+| accuracy | ucb1 | B | B | 94.5 (75.0 to 118.2) | 0.8220 | 0.5770 | 0.1790 | 0 | 0 | 0 |
+| accuracy | random | B | B | 123.2 (104.4 to 142.7) | 0.8182 | 0.6170 | 0.1780 | 0 | 0 | 0 |
+| accuracy | static_best | B | B | 0.0 (0.0 to 0.0) | 0.8348 | 0.6000 | 0.1790 | 0 | 0 | 0 |
+| accuracy | ensemble | B | B | 199.9 (199.9 to 199.9) | 0.8078 | 1.000 | 0.1720 | 0 | 0 | 0 |
+| accuracy | heuristic | B | B | -87.6 (-87.6 to -87.6) | 0.8467 | 0.5880 | 0.2620 | 0 | 0 | 0 |

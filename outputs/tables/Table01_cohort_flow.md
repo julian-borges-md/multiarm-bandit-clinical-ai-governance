@@ -2,12 +2,12 @@
 
 | step | n_remaining | n_excluded |
 | --- | --- | --- |
-| ICU stays joined to admissions | 94458. | 0 |
-| Complete timestamps and sex | 94444. | 14.00 |
-| Valid time ordering | 94363. | 81.00 |
-| Age 18 or older | 94363. | 0 |
-| ICU length of stay 24 h to 60 d (feature window fully observed) | 74765. | 19598. |
-| Index ICU stay per hospital admission | 68503. | 6262. |
-| Anchor year group available | 68503. | 0 |
-| Development set sampled (train plus validation) | 20000. |  |
-| Deployment stream sampled | 7383. |  |
+| ICU stays joined to admissions | 94458 | 0 |
+| Complete timestamps and sex | 94444 | 14.00 |
+| Valid time ordering | 94363 | 81.00 |
+| Age 18 or older | 94363 | 0 |
+| ICU length of stay 24 h to 60 d (feature window fully observed) | 74765 | 19598 |
+| Index ICU stay per hospital admission | 68503 | 6262 |
+| Anchor year group available | 68503 | 0 |
+| Development set sampled (train plus validation) | 20000 |  |
+| Deployment stream sampled | 7383 |  |
