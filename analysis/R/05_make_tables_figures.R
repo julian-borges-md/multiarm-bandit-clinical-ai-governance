@@ -238,29 +238,35 @@ save_fig(p8, 8, "EvidenceHorizon", width = 8.5, height = 8)
 # Figure 9: when the validation choice is wrong on the stream (drift scenarios)
 # -----------------------------------------------------------------------------
 sdr <- load_result("sensitivity_drift")
-drift_lab <- c(arm_A_moderate_from_start = "Moderate degradation of arm A from the start", arm_A_moderate_from_third = "Moderate degradation of arm A from one third",
-               arm_A_severe_from_start = "Severe degradation of arm A from the start", arm_A_severe_from_third = "Severe degradation of arm A from one third")
+dsc9 <- load_result("drift_scenario_description")
 pol9 <- c("static_A", "fcae_eb", "ucb1", "thompson_gauss", "random")
-s9 <- sdr[policy %in% pol9 & drift_scenario %in% names(drift_lab)]
-s9_static <- unique(sdr[drift_scenario %in% names(drift_lab), .(drift_scenario, delay_scenario, cum_regret_fixed_mean = static_best_regret_mean,
-                                                               cum_regret_fixed_lo = NA_real_, cum_regret_fixed_hi = NA_real_)])
-s9_static[, policy := "static_A"]
-s9 <- rbind(s9[, .(drift_scenario, delay_scenario, policy, cum_regret_fixed_mean, cum_regret_fixed_lo, cum_regret_fixed_hi)], s9_static, use.names = TRUE)
-s9[, policy := factor(policy, levels = pol9)]
-s9[, scenario_label := factor(drift_lab[drift_scenario], levels = unname(drift_lab))]
-s9[, delay_scenario := factor(delay_scenario, levels = c("none", "primary", "long"), labels = c("No delay", "Primary delay", "Long delay"))]
 lab9 <- c(static_A = "Static deployment of arm A (the validation choice)", fcae_eb = "Fixed confidence action elimination (empirical Bernstein)",
           ucb1 = "UCB1", thompson_gauss = "Thompson sampling (Gaussian posterior)", random = "Uniform random")
-p9 <- ggplot(s9, aes(x = delay_scenario, y = cum_regret_fixed_mean, colour = policy)) +
-  geom_errorbar(aes(ymin = cum_regret_fixed_lo, ymax = cum_regret_fixed_hi), width = 0.25, position = position_dodge(width = 0.6), na.rm = TRUE) +
-  geom_point(aes(shape = policy), size = 2.6, position = position_dodge(width = 0.6)) +
-  facet_wrap(~ scenario_label, ncol = 2, scales = "free_y") +
-  scale_shape_manual(values = c(static_A = 18, fcae_eb = 16, ucb1 = 16, thompson_gauss = 16, random = 16), labels = lab9[pol9]) +
-  scale_colour_manual(values = pal[pol9], labels = lab9[pol9]) +
-  labs(x = NULL, y = "Cumulative regret against the best fixed arm on the stream", colour = NULL, shape = NULL,
-       caption = "Static deployment of arm A is shown without an interval; the regret of the other policies is the mean over 30 replicates with its 2.5 and 97.5 percentiles.") +
-  theme(legend.position = "bottom") + guides(colour = guide_legend(ncol = 2), shape = guide_legend(ncol = 2))
-save_fig(p9, 9, "DriftScenarios", width = 8.5, height = 7.5)
+s9 <- sdr[policy %in% pol9 & drift_scenario %in% dsc9$drift_scenario]
+if (nrow(s9) > 0) {
+  s9_static <- unique(sdr[drift_scenario %in% dsc9$drift_scenario, .(drift_scenario, delay_scenario, cum_regret_fixed_mean = static_best_regret_mean,
+                                                                   cum_regret_fixed_lo = NA_real_, cum_regret_fixed_hi = NA_real_)])
+  s9_static[, policy := "static_A"]
+  s9 <- rbind(s9[, .(drift_scenario, delay_scenario, policy, cum_regret_fixed_mean, cum_regret_fixed_lo, cum_regret_fixed_hi)], s9_static, use.names = TRUE)
+  s9[, policy := factor(policy, levels = pol9)]
+  scen9 <- unique(sdr[drift_scenario %in% dsc9$drift_scenario, .(drift_scenario, drift_arm, drift_start_fraction, logit_noise_sd)])
+  scen9[, scenario_label := sprintf("Degradation of arm %s (logit noise sd %.1f) from %s", drift_arm, logit_noise_sd,
+                                    ifelse(drift_start_fraction > 0, "one third of the stream", "the start"))]
+  setorder(scen9, logit_noise_sd, drift_start_fraction)
+  s9 <- merge(s9, scen9[, .(drift_scenario, scenario_label)], by = "drift_scenario")
+  s9[, scenario_label := factor(scenario_label, levels = scen9$scenario_label)]
+  s9[, delay_scenario := factor(delay_scenario, levels = c("none", "primary", "long"), labels = c("No delay", "Primary delay", "Long delay"))]
+  p9 <- ggplot(s9, aes(x = delay_scenario, y = cum_regret_fixed_mean, colour = policy)) +
+    geom_errorbar(aes(ymin = cum_regret_fixed_lo, ymax = cum_regret_fixed_hi), width = 0.25, position = position_dodge(width = 0.6), na.rm = TRUE) +
+    geom_point(aes(shape = policy), size = 2.6, position = position_dodge(width = 0.6)) +
+    facet_wrap(~ scenario_label, ncol = 2, scales = "free_y") +
+    scale_shape_manual(values = c(static_A = 18, fcae_eb = 16, ucb1 = 16, thompson_gauss = 16, random = 16), labels = lab9[pol9]) +
+    scale_colour_manual(values = pal[pol9], labels = lab9[pol9]) +
+    labs(x = NULL, y = "Cumulative regret against the best fixed arm on the stream", colour = NULL, shape = NULL,
+         caption = "Static deployment of arm A is shown without an interval; the regret of the other policies is the mean over 30 replicates with its 2.5 and 97.5 percentiles.") +
+    theme(legend.position = "bottom") + guides(colour = guide_legend(ncol = 2), shape = guide_legend(ncol = 2))
+  save_fig(p9, 9, "DriftScenarios", width = 8.5, height = 7.5)
+} else msg("Figure 9 skipped: no drift scenario rows")
 
 # -----------------------------------------------------------------------------
 # Figure 10: composition of the reward gaps on the stream (utility, safety and cost terms)
@@ -332,24 +338,32 @@ save_fig(p12, 12, "SubgroupSensitivity", width = 8.5, height = 9)
 # -----------------------------------------------------------------------------
 ehr <- load_result("extended_horizon_replicates")
 dsc <- load_result("drift_scenario_description")
-arm_idx <- function(a) match(a, arms$arm)
-e13 <- rbind(
-  ehr[scenario == "primary" & policy == "fcae_eb", .(case = sprintf("Primary analysis: retirement of arm %s", arms$arm[3]), step = get(paste0("elim_step_arm", 3)))],
-  ehr[scenario == "arm_A_severe_from_start" & policy == "fcae_eb", .(case = "Severe degradation of arm A: retirement of arm A", step = get(paste0("elim_step_arm", arm_idx("A"))))])
+ext_drift <- params$simulation$extended_horizon$drift_scenario
+arm_best <- arms$arm[arms$static_best]
+arm_far <- isc[scenario == "utility_brier" & !is.na(n_per_arm_bernstein)][which.min(n_per_arm_bernstein), arm]
+e13 <- ehr[scenario == "primary" & policy == "fcae_eb", .(case = sprintf("Primary analysis: retirement of arm %s", arm_far), step = get(paste0("elim_step_arm", match(arm_far, arms$arm))))]
+imp13 <- data.table(case = sprintf("Primary analysis: retirement of arm %s", arm_far), step = isc[scenario == "utility_brier" & arm == arm_far, decisions_round_robin_bernstein])
+if (!is.null(ext_drift) && ext_drift %in% ehr$scenario) {
+  drift_arm <- if (ext_drift %in% dsc$drift_scenario) dsc[drift_scenario == ext_drift, arm][1] else arm_best
+  e13 <- rbind(e13, ehr[scenario == ext_drift & policy == "fcae_eb", .(case = sprintf("Degradation of arm %s: retirement of arm %s", drift_arm, drift_arm),
+                                                                       step = get(paste0("elim_step_arm", match(drift_arm, arms$arm))))])
+  if (ext_drift %in% dsc$drift_scenario)
+    imp13 <- rbind(imp13, data.table(case = sprintf("Degradation of arm %s: retirement of arm %s", drift_arm, drift_arm), step = dsc[drift_scenario == ext_drift, decisions_round_robin_bernstein]))
+}
 e13[, case := factor(case, levels = unique(case))]
-imp13 <- data.table(case = levels(e13$case),
-                    step = c(isc[scenario == "utility_brier" & arm == arms$arm[3], decisions_round_robin_bernstein],
-                             dsc[drift_scenario == "arm_A_severe_from_start", decisions_round_robin_bernstein]))
+imp13[, case := factor(case, levels = levels(e13$case))]
 n_T <- as.numeric(params$simulation$extended_horizon$T)
-p13 <- ggplot(e13[!is.na(step)], aes(x = step, colour = case)) + stat_ecdf(linewidth = 0.9) +
-  geom_vline(xintercept = n_avail * K, linetype = "dashed", colour = "grey35") +
-  geom_vline(data = imp13, aes(xintercept = step, colour = case), linetype = "dotted") +
-  annotate("text", x = n_avail * K, y = 0.6, label = sprintf("stream length\n(%s decisions)", format(n_avail * K, big.mark = ",")), hjust = 1.08, size = 3.3, colour = "grey25") +
-  scale_x_continuous(labels = comma, limits = c(0, n_T)) + scale_y_continuous(labels = percent) +
-  scale_colour_manual(values = c("#cb4335", "#1e8449")) +
-  labs(x = "Decision index at which the arm was retired (empirical Bernstein bound, 30 replicates)", y = "Share of replicates with a decision by this index",
-       colour = NULL, caption = "Dotted lines: decisions implied by the sample complexity formula for each case.") +
-  theme(legend.position = "bottom") + guides(colour = guide_legend(ncol = 1))
-save_fig(p13, 13, "ExtendedHorizonDecisionTime", width = 8, height = 5.5)
+if (nrow(e13[!is.na(step)]) > 0) {
+  p13 <- ggplot(e13[!is.na(step)], aes(x = step, colour = case)) + stat_ecdf(linewidth = 0.9) +
+    geom_vline(xintercept = n_avail * K, linetype = "dashed", colour = "grey35") +
+    geom_vline(data = imp13[!is.na(step)], aes(xintercept = step, colour = case), linetype = "dotted") +
+    annotate("text", x = n_avail * K, y = 0.6, label = sprintf("stream length\n(%s decisions)", format(n_avail * K, big.mark = ",")), hjust = 1.08, size = 3.3, colour = "grey25") +
+    scale_x_continuous(labels = comma, limits = c(0, n_T)) + scale_y_continuous(labels = percent) +
+    scale_colour_manual(values = c("#cb4335", "#1e8449")[seq_len(nlevels(e13$case))]) +
+    labs(x = "Decision index at which the arm was retired (empirical Bernstein bound, 30 replicates)", y = "Share of replicates with a decision by this index",
+         colour = NULL, caption = "Dotted lines: decisions implied by the sample complexity formula for each case.") +
+    theme(legend.position = "bottom") + guides(colour = guide_legend(ncol = 1))
+  save_fig(p13, 13, "ExtendedHorizonDecisionTime", width = 8, height = 5.5)
+} else msg("Figure 13 skipped: no elimination on the extended horizon")
 
 msg("05_make_tables_figures.R done")
