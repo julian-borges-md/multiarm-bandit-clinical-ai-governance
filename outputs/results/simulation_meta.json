@@ -1,0 +1,15 @@
+{
+  "T": 7383,
+  "events": 983,
+  "K": 3,
+  "arms": ["A", "B", "C"],
+  "static_best_arm": "A",
+  "replicates": 100,
+  "sensitivity_replicates": 30,
+  "lambda_cost": 0.1,
+  "lambda_safety": 0.5,
+  "delta": 0.05,
+  "delay_hours": [6, 72],
+  "arrival_rate_per_hour": 0.520974979085862,
+  "elapsed_min": 2.20539168119431
+}

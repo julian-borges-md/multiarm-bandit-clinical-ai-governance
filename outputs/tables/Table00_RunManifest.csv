@@ -1,0 +1,6 @@
+step,script,started,ended,elapsed_sec,status,error
+1,01_build_cohort.R,2026-10-13T00:45:29Z,2026-10-13T00:45:31Z,2.43390297889709,success,""
+2,02_extract_features.R,2026-10-13T00:45:31Z,2026-10-13T00:47:02Z,38.5449781417847,success,""
+3,03_train_models.R,2026-10-13T00:47:02Z,2026-10-13T00:47:10Z,8.3287250995636,success,""
+4,04_run_bandit_simulation.R,2026-10-13T00:47:10Z,2026-10-13T00:49:22Z,132.341708898544,success,""
+5,05_make_tables_figures.R,2026-10-13T00:49:22Z,2026-10-13T00:49:24Z,1.69378304481506,success,""

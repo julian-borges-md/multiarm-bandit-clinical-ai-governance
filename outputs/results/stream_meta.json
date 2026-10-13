@@ -1,0 +1,10 @@
+{
+  "mode": "mimic",
+  "arrival_rate_per_hour": 0.520974979085862,
+  "n_eligible": 68503,
+  "n_train": 15000,
+  "n_val": 5000,
+  "n_stream": 7383,
+  "development_year_groups": ["2008 - 2010", "2011 - 2013", "2014 - 2016", "2017 - 2019"],
+  "deployment_year_groups": "2020 - 2022"
+}

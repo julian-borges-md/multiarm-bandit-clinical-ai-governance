@@ -1,0 +1,12 @@
+# Table 8: elimination_summary
+
+| policy | statistic | arm_A | arm_B | arm_C |
+| --- | --- | --- | --- | --- |
+| fcae | eliminated_share | 0 | 0 | 0 |
+| fcae | median_step |  |  |  |
+| fcae | p2.5_step |  |  |  |
+| fcae | p97.5_step |  |  |  |
+| fcae_eb | eliminated_share | 0 | 0 | 0 |
+| fcae_eb | median_step |  |  |  |
+| fcae_eb | p2.5_step |  |  |  |
+| fcae_eb | p97.5_step |  |  |  |
